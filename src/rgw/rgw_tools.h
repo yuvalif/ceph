@@ -179,4 +179,6 @@ public:
   friend class Object;
 };
 
+using RGWDataAccessRef = std::shared_ptr<RGWDataAccess>;
+
 #endif
