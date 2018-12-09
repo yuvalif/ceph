@@ -248,7 +248,8 @@ struct es_index_config {
 };
 
 static bool is_sys_attr(const std::string& attr_name){
-  static constexpr std::initializer_list rgw_sys_attrs = {RGW_ATTR_PG_VER,
+  static constexpr std::initializer_list<const char*> rgw_sys_attrs =
+                                                         {RGW_ATTR_PG_VER,
                                                           RGW_ATTR_SOURCE_ZONE,
                                                           RGW_ATTR_ID_TAG,
                                                           RGW_ATTR_TEMPURL_KEY1,
@@ -286,17 +287,22 @@ struct es_obj_metadata {
       const string& attr_name = i.first;
       bufferlist& val = i.second;
 
-      if (attr_name.compare(0, sizeof(RGW_ATTR_PREFIX) - 1, RGW_ATTR_PREFIX) != 0) {
+      if (!boost::algorithm::starts_with(attr_name, RGW_ATTR_PREFIX)) {
         continue;
       }
 
-      if (attr_name.compare(0, sizeof(RGW_ATTR_META_PREFIX) - 1, RGW_ATTR_META_PREFIX) == 0) {
+      if (boost::algorithm::starts_with(attr_name, RGW_ATTR_META_PREFIX)) {
         custom_meta.emplace(attr_name.substr(sizeof(RGW_ATTR_META_PREFIX) - 1),
                             string(val.c_str(), (val.length() > 0 ? val.length() - 1 : 0)));
         continue;
       }
 
-      if (attr_name.compare(0, sizeof(RGW_ATTR_CRYPT_PREFIX) -1, RGW_ATTR_CRYPT_PREFIX) == 0) {
+      if (boost::algorithm::starts_with(attr_name, RGW_ATTR_CRYPT_PREFIX)) {
+        continue;
+      }
+
+      if (boost::algorithm::starts_with(attr_name, RGW_ATTR_OLH_PREFIX)) {
+        // skip versioned object olh info
         continue;
       }
 
@@ -351,7 +357,10 @@ struct es_obj_metadata {
     }
     ::encode_json("bucket", bucket_info.bucket.name, f);
     ::encode_json("name", key.name, f);
-    ::encode_json("instance", key.instance, f);
+    string instance = key.instance;
+    if (instance.empty())
+      instance = "null";
+    ::encode_json("instance", instance, f);
     ::encode_json("versioned_epoch", versioned_epoch, f);
     ::encode_json("owner", policy.get_owner(), f);
     ::encode_json("permissions", permissions, f);

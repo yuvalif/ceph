@@ -1255,6 +1255,7 @@ class RGWRados : public AdminSocketHook
                          bool follow_olh, bool assume_noent = false);
   int append_atomic_test(RGWObjectCtx *rctx, const RGWBucketInfo& bucket_info, const rgw_obj& obj,
                          librados::ObjectOperation& op, RGWObjState **state);
+  int append_atomic_test(const RGWObjState* astate, librados::ObjectOperation& op);
 
   int update_placement_map();
   int store_bucket_info(RGWBucketInfo& info, map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker, bool exclusive);
@@ -1425,14 +1426,6 @@ public:
   int register_to_service_map(const string& daemon_type, const map<string, string>& meta);
   int update_service_map(std::map<std::string, std::string>&& status);
 
-  /** set up a bucket listing. handle is filled in. */
-  int list_buckets_init(RGWAccessHandle *handle);
-  /** 
-   * get the next bucket in the listing. obj is filled in,
-   * handle is updated.
-   */
-  int list_buckets_next(rgw_bucket_dir_entry& obj, RGWAccessHandle *handle);
-
   /// list logs
   int log_list_init(const string& prefix, RGWAccessHandle *handle);
   int log_list_next(RGWAccessHandle handle, string *name);
@@ -1455,6 +1448,7 @@ public:
   int create_pool(const rgw_pool& pool);
 
   int init_bucket_index(RGWBucketInfo& bucket_info, int num_shards);
+  int clean_bucket_index(RGWBucketInfo& bucket_info, int num_shards);
   void create_bucket_id(string *bucket_id);
 
   bool get_obj_data_pool(const string& placement_rule, const rgw_obj& obj, rgw_pool *pool);
@@ -2022,20 +2016,18 @@ public:
     return get_obj_state(rctx, bucket_info, obj, state, true);
   }
 
-  int iterate_obj(RGWObjectCtx& ctx,
-                  const RGWBucketInfo& bucket_info, const rgw_obj& obj,
-                  off_t ofs, off_t end,
-                  uint64_t max_chunk_size,
-                  int (*iterate_obj_cb)(const RGWBucketInfo& bucket_info, const rgw_obj& obj, const rgw_raw_obj&, off_t, off_t, off_t, bool, RGWObjState *, void *),
-                  void *arg);
+  using iterate_obj_cb = int (*)(const rgw_raw_obj&, off_t, off_t,
+                                 off_t, bool, RGWObjState*, void*);
+
+  int iterate_obj(RGWObjectCtx& ctx, const RGWBucketInfo& bucket_info,
+                  const rgw_obj& obj, off_t ofs, off_t end,
+                  uint64_t max_chunk_size, iterate_obj_cb cb, void *arg);
 
   int flush_read_list(struct get_obj_data *d);
 
-  int get_obj_iterate_cb(RGWObjectCtx *ctx, RGWObjState *astate,
-                         const RGWBucketInfo& bucket_info, const rgw_obj& obj,
-                         const rgw_raw_obj& read_obj,
-                         off_t obj_ofs, off_t read_ofs, off_t len,
-                         bool is_head_obj, void *arg);
+  int get_obj_iterate_cb(const rgw_raw_obj& read_obj, off_t obj_ofs,
+                         off_t read_ofs, off_t len, bool is_head_obj,
+                         RGWObjState *astate, void *arg);
 
   void get_obj_aio_completion_cb(librados::completion_t cb, void *arg);
 
@@ -2178,7 +2170,6 @@ public:
   int put_linked_bucket_info(RGWBucketInfo& info, bool exclusive, ceph::real_time mtime, obj_version *pep_objv,
 			     map<string, bufferlist> *pattrs, bool create_entry_point);
 
-  int cls_rgw_init_index(librados::IoCtx& io_ctx, librados::ObjectWriteOperation& op, string& oid);
   int cls_obj_prepare_op(BucketShard& bs, RGWModifyOp op, string& tag, rgw_obj& obj, uint16_t bilog_flags, rgw_zone_set *zones_trace = nullptr);
   int cls_obj_complete_op(BucketShard& bs, const rgw_obj& obj, RGWModifyOp op, string& tag, int64_t pool, uint64_t epoch,
                           rgw_bucket_dir_entry& ent, RGWObjCategory category, list<rgw_obj_index_key> *remove_objs, uint16_t bilog_flags, rgw_zone_set *zones_trace = nullptr);

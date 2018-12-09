@@ -42,6 +42,13 @@ class OrchestratorCli(MgrModule):
             "perm": "rw"
         },
         {
+            'cmd': "orchestrator service rm "
+                   "name=svc_type,type=CephString "
+                   "name=svc_id,type=CephString ",
+            "desc": "Remove a service",
+            "perm": "rw"
+        },
+        {
             'cmd': "orchestrator set backend "
                    "name=module,type=CephString,req=true",
             "desc": "Select orchestrator module backend",
@@ -78,7 +85,7 @@ class OrchestratorCli(MgrModule):
         done = False
 
         while done is False:
-            done = self._oremote("wait", completions)
+            done = self._oremote("wait", completions) == []
 
             if not done:
                 any_nonpersistent = False
@@ -249,6 +256,14 @@ class OrchestratorCli(MgrModule):
         else:
             raise NotImplementedError(svc_type)
 
+    def _service_rm(self, cmd):
+        svc_type = cmd['svc_type']
+        svc_id = cmd['svc_id']
+
+        completion = self._oremote("remove_stateless_service", svc_type, svc_id)
+        self._wait([completion])
+        return HandleCommandResult(rs="Success.")
+
     def _set_backend(self, cmd):
         """
         We implement a setter command instead of just having the user
@@ -303,9 +318,9 @@ class OrchestratorCli(MgrModule):
 
         if avail is None:
             # The module does not report its availability
-            return HandleCommandResult("Backend: {0}".format(self._select_orchestrator()))
+            return HandleCommandResult(odata="Backend: {0}".format(self._select_orchestrator()))
         else:
-            return HandleCommandResult("Backend: {0}\nAvailable: {1}{2}".format(
+            return HandleCommandResult(odata="Backend: {0}\nAvailable: {1}{2}".format(
                                            self._select_orchestrator(),
                                            avail,
                                            " ({0})".format(why) if not avail else ""
@@ -330,6 +345,8 @@ class OrchestratorCli(MgrModule):
             return self._service_status(cmd)
         elif cmd['prefix'] == "orchestrator service add":
             return self._service_add(cmd)
+        elif cmd['prefix'] == "orchestrator service rm":
+            return self._service_rm(cmd)
         elif cmd['prefix'] == "orchestrator set backend":
             return self._set_backend(cmd)
         elif cmd['prefix'] == "orchestrator status":

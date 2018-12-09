@@ -5,6 +5,7 @@
 #include "rgw/rgw_service.h"
 
 #include "include/rados/librados.hpp"
+#include "common/async/yield_context.h"
 
 class RGWAccessListFilter {
 public:
@@ -22,9 +23,7 @@ struct RGWAccessListFilterPrefix : public RGWAccessListFilter {
 };
 
 struct rgw_rados_ref {
-  rgw_pool pool;
-  string oid;
-  string key;
+  rgw_raw_obj obj;
   librados::IoCtx ioctx;
 };
 
@@ -74,8 +73,9 @@ public:
 
     int open();
 
-    int operate(librados::ObjectWriteOperation *op);
-    int operate(librados::ObjectReadOperation *op, bufferlist *pbl);
+    int operate(librados::ObjectWriteOperation *op, optional_yield y);
+    int operate(librados::ObjectReadOperation *op, bufferlist *pbl,
+                optional_yield y);
     int aio_operate(librados::AioCompletion *c, librados::ObjectWriteOperation *op);
     int aio_operate(librados::AioCompletion *c, librados::ObjectReadOperation *op,
                     bufferlist *pbl);
@@ -92,9 +92,8 @@ public:
 
     uint64_t get_last_version();
 
-    rgw_rados_ref& get_ref() {
-      return ref;
-    }
+    rgw_rados_ref& get_ref() { return ref; }
+    const rgw_rados_ref& get_ref() const { return ref; }
   };
 
   class Pool {

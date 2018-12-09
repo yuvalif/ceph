@@ -6,8 +6,6 @@
 #include <algorithm>
 #include <string>
 #include <boost/tokenizer.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/utility/string_view.hpp>
 
 #include "json_spirit/json_spirit.h"
 #include "common/ceph_json.h"
@@ -404,7 +402,6 @@ struct str_len meta_prefixes[] = { STR_LEN_ENTRY("HTTP_X_AMZ"),
                                    STR_LEN_ENTRY("HTTP_X_CONTAINER"),
                                    STR_LEN_ENTRY("HTTP_X_ACCOUNT"),
                                    {NULL, 0} };
-
 
 void req_info::init_meta_info(bool *found_bad_meta)
 {
@@ -1959,12 +1956,15 @@ bool match_policy(boost::string_view pattern, boost::string_view input,
 {
   const uint32_t flag2 = flag & (MATCH_POLICY_ACTION|MATCH_POLICY_ARN) ?
       MATCH_CASE_INSENSITIVE : 0;
+  const bool colonblocks = !(flag & (MATCH_POLICY_RESOURCE |
+				     MATCH_POLICY_STRING));
 
   const auto npos = boost::string_view::npos;
   boost::string_view::size_type last_pos_input = 0, last_pos_pattern = 0;
   while (true) {
-    auto cur_pos_input = input.find(":", last_pos_input);
-    auto cur_pos_pattern = pattern.find(":", last_pos_pattern);
+    auto cur_pos_input = colonblocks ? input.find(":", last_pos_input) : npos;
+    auto cur_pos_pattern =
+      colonblocks ? pattern.find(":", last_pos_pattern) : npos;
 
     auto substr_input = input.substr(last_pos_input, cur_pos_input);
     auto substr_pattern = pattern.substr(last_pos_pattern, cur_pos_pattern);

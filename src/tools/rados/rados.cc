@@ -103,7 +103,7 @@ void usage(ostream& out)
 "   rollback <obj-name> <snap-name>  roll back object to snap <snap-name>\n"
 "\n"
 "   listsnaps <obj-name>             list the snapshots of this object\n"
-"   bench <seconds> write|seq|rand [-t concurrent_operations] [--no-cleanup] [--run-name run_name] [--no-hints]\n"
+"   bench <seconds> write|seq|rand [-t concurrent_operations] [--no-cleanup] [--run-name run_name] [--no-hints] [--reuse-bench]\n"
 "                                    default is 16 concurrent IOs and 4 MB ops\n"
 "                                    default is to clean up after write benchmark\n"
 "                                    default run-name is 'benchmark_last_metadata'\n"
@@ -1438,7 +1438,7 @@ static int do_cache_flush_evict_all(IoCtx& io_ctx, bool blocking)
       }
     }
   }
-  catch (const std::runtime_error& e) {
+  catch (const std::exception& e) {
     cerr << e.what() << std::endl;
     return -1;
   }
@@ -1846,6 +1846,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   int bench_write_dest = 0;
   bool cleanup = true;
   bool hints = true; // for rados bench
+  bool reuse_bench = false;
   bool no_verify = false;
   bool use_striper = false;
   bool with_clones = false;
@@ -2032,6 +2033,10 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   i = opts.find("no-hints");
   if (i != opts.end()) {
     hints = false;
+  }
+  i = opts.find("reuse-bench");
+  if (i != opts.end()) {
+    reuse_bench = true;
   }
   i = opts.find("pretty-format");
   if (i != opts.end()) {
@@ -2287,6 +2292,8 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       tab.define_column("RD", TextTable::RIGHT, TextTable::RIGHT);
       tab.define_column("WR_OPS", TextTable::RIGHT, TextTable::RIGHT);
       tab.define_column("WR", TextTable::RIGHT, TextTable::RIGHT);
+      tab.define_column("USED COMPR", TextTable::RIGHT, TextTable::RIGHT);
+      tab.define_column("UNDER COMPR", TextTable::RIGHT, TextTable::RIGHT);
     } else {
       formatter->open_object_section("stats");
       formatter->open_array_section("pools");
@@ -2309,6 +2316,8 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
             << byte_u_t(s.num_rd_kb << 10)
             << s.num_wr
             << byte_u_t(s.num_wr_kb << 10)
+	    << byte_u_t(s.compressed_bytes_alloc)
+	    << byte_u_t(s.compressed_bytes_orig)
             << TextTable::endrow;
       } else {
         formatter->open_object_section("pool");
@@ -2331,6 +2340,8 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 	formatter->dump_int("read_bytes", s.num_rd_kb * 1024ull);
 	formatter->dump_int("write_ops", s.num_wr);
 	formatter->dump_int("write_bytes", s.num_wr_kb * 1024ull);
+	formatter->dump_int("compress_bytes_used", s.compressed_bytes_alloc);
+	formatter->dump_int("compress_under_bytes", s.compressed_bytes_orig);
 	formatter->close_section();
       }
     }
@@ -2430,7 +2441,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 	  }
 	}
       }
-      catch (const std::runtime_error& e) {
+      catch (const std::exception& e) {
 	cerr << e.what() << std::endl;
 	return 1;
       }
@@ -3184,7 +3195,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     cout << "hints = " << (int)hints << std::endl;
     ret = bencher.aio_bench(operation, seconds,
 			    concurrent_ios, op_size, object_size,
-			    max_objects, cleanup, hints, run_name, no_verify);
+			    max_objects, cleanup, hints, run_name, reuse_bench, no_verify);
     if (ret != 0)
       cerr << "error during benchmark: " << cpp_strerror(ret) << std::endl;
     if (formatter && output)
@@ -3907,6 +3918,8 @@ int main(int argc, const char **argv)
       opts["no-cleanup"] = "true";
     } else if (ceph_argparse_flag(args, i, "--no-hints", (char*)NULL)) {
       opts["no-hints"] = "true";
+    } else if (ceph_argparse_flag(args, i, "--reuse-bench", (char*)NULL)) {
+      opts["reuse-bench"] = "true";
     } else if (ceph_argparse_flag(args, i, "--no-verify", (char*)NULL)) {
       opts["no-verify"] = "true";
     } else if (ceph_argparse_witharg(args, i, &val, "--run-name", (char*)NULL)) {

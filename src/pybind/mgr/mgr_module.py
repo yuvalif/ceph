@@ -5,10 +5,7 @@ import logging
 import json
 import six
 import threading
-try:
-    from collections.abc import defaultdict, namedtuple
-except ImportError:
-    from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple
 import rados
 import time
 
@@ -970,12 +967,15 @@ class MgrModule(ceph_module.BaseMgrModule):
              'performance_counter_descriptors': [
                list, of, descriptor, types
              ],
+             'limit': {'order_by': performance_counter_type, 'max_count': n},
            }
 
-        Valid subkey types: 'client_id', 'pool_id', 'object_name'
+        Valid subkey types:
+           'client_id', 'client_address', 'pool_id', 'namespace', 'osd_id',
+           'pg_id', 'object_name', 'snap_id'
         Valid performance counter types:
-           'write_ops', 'read_ops', 'write_bytes', 'read_bytes',
-           'write_latency', 'read_latency'
+           'ops', 'write_ops', 'read_ops', 'bytes', 'write_bytes', 'read_bytes',
+           'latency', 'write_latency', 'read_latency'
 
         :param object query: query
         :rtype: int (query id)

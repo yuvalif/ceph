@@ -4257,6 +4257,10 @@ std::vector<Option> get_global_options() {
     .set_default(false)
     .set_description("Run deep fsck after mkfs"),
 
+    Option("bluestore_fsck_error_on_legacy_stats", Option::TYPE_BOOL, Option::LEVEL_DEV)
+    .set_default(false)
+    .set_description("Popup errors on legacy (store-wide only) stats detection"),
+
     Option("bluestore_sync_submit_transaction", Option::TYPE_BOOL, Option::LEVEL_DEV)
     .set_default(false)
     .set_description("Try to submit metadata transaction to rocksdb in queuing thread context"),
@@ -4384,6 +4388,10 @@ std::vector<Option> get_global_options() {
     Option("bluestore_debug_inject_csum_err_probability", Option::TYPE_FLOAT, Option::LEVEL_DEV)
     .set_default(0.0)
     .set_description("inject crc verification errors into bluestore device reads"),
+
+    Option("bluestore_debug_no_per_pool_stats", Option::TYPE_BOOL, Option::LEVEL_DEV)
+    .set_default(false)
+    .set_description(""),
 
     // -----------------------------------------
     // kstore
@@ -5021,7 +5029,18 @@ std::vector<Option> get_global_options() {
     .set_description("Method used to predict device failures")
     .set_long_description("To disable prediction, use 'none',  'local' uses a prediction model that runs inside the mgr daemon.  'cloud' will share metrics with a cloud service and query the service for devicelife expectancy."),
 
+    /*  KRB Authentication. */
+    Option("gss_ktab_client_file", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("/var/lib/ceph/$name/gss_client_$name.ktab")
+    .set_description("GSS/KRB5 Keytab file for client authentication")
+    .add_service({"mon", "osd"})
+    .set_long_description("This sets the full path for the GSS/Kerberos client keytab file location."),
 
+    Option("gss_target_name", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("ceph")
+    .set_description("")
+    .add_service({"mon", "osd"})
+    .set_long_description("This sets the gss target service name."),
   });
 }
 
@@ -7358,6 +7377,16 @@ std::vector<Option> get_mds_options() {
     Option("mds_max_retries_on_remount_failure", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
      .set_default(5)
      .set_description("number of consecutive failed remount attempts for invalidating kernel dcache after which client would abort."),
+
+    Option("mds_dump_cache_threshold_formatter", Option::TYPE_SIZE, Option::LEVEL_DEV)
+     .set_default(1_G)
+     .set_description("threshold for cache usage to disallow \"dump cache\" operation to formatter")
+     .set_long_description("Disallow MDS from dumping caches to formatter via \"dump cache\" command if cache usage exceeds this threshold."),
+
+    Option("mds_dump_cache_threshold_file", Option::TYPE_SIZE, Option::LEVEL_DEV)
+     .set_default(0)
+     .set_description("threshold for cache usage to disallow \"dump cache\" operation to file")
+     .set_long_description("Disallow MDS from dumping caches to file via \"dump cache\" command if cache usage exceeds this threshold."),
   });
 }
 

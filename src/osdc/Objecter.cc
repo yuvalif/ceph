@@ -1328,15 +1328,7 @@ void Objecter::handle_osd_map(MOSDMap *m)
   for (list<LingerOp*>::iterator p = need_resend_linger.begin();
        p != need_resend_linger.end(); ++p) {
     LingerOp *op = *p;
-    if (!op->session) {
-      _calc_target(&op->target, nullptr);
-      OSDSession *s = NULL;
-      const int r = _get_session(op->target.osd, &s, sul);
-      ceph_assert(r == 0);
-      ceph_assert(s != NULL);
-      op->session = s;
-      put_session(s);
-    }
+    ceph_assert(op->session);
     if (!op->session->is_homeless()) {
       logger->inc(l_osdc_linger_resend);
       _send_linger(op, sul);
@@ -2884,10 +2876,12 @@ int Objecter::_calc_target(op_target_t *t, Connection *con, bool any_change)
     force_resend = true;
   }
 
-  bool unpaused = false;
-  if (t->paused && !target_should_be_paused(t)) {
+  bool unpaused = !target_should_be_paused(t);
+  if (t->paused && unpaused) {
     t->paused = false;
-    unpaused = true;
+  } else {
+    t->paused = !unpaused;
+    unpaused = false;
   }
 
   bool legacy_change =

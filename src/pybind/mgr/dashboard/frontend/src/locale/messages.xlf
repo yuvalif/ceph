@@ -28,7 +28,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">82</context>
+          <context context-type="linenumber">81</context>
         </context-group>
       </trans-unit><trans-unit id="624f596cc3320f5e0a0d7c7346c364e5af9bdd8c" datatype="html">
         <source>Monitors</source>
@@ -38,7 +38,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">49</context>
+          <context context-type="linenumber">48</context>
         </context-group>
       </trans-unit><trans-unit id="1a9183778f2c6473d7ccb080f651caa01faaf70c" datatype="html">
         <source>OSDs</source>
@@ -48,7 +48,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">58</context>
+          <context context-type="linenumber">57</context>
         </context-group>
       </trans-unit><trans-unit id="4a41f824a35ba01d5bd7be61aa06b3e8145209d0" datatype="html">
         <source>Configuration</source>
@@ -80,7 +80,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">191</context>
+          <context context-type="linenumber">190</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cephfs/cephfs-detail/cephfs-detail.component.html</context>
@@ -360,6 +360,10 @@
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/block/rbd-form/rbd-form.component.html</context>
           <context context-type="linenumber">175</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.html</context>
+          <context context-type="linenumber">31</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-reweight-modal/osd-reweight-modal.component.html</context>
@@ -759,7 +763,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-list/osd-list.component.html</context>
-          <context context-type="linenumber">50</context>
+          <context context-type="linenumber">59</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/pool/pool-list/pool-list.component.html</context>
@@ -860,6 +864,10 @@
           <context context-type="linenumber">38</context>
         </context-group>
         <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.html</context>
+          <context context-type="linenumber">78</context>
+        </context-group>
+        <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-reweight-modal/osd-reweight-modal.component.html</context>
           <context context-type="linenumber">34</context>
         </context-group>
@@ -904,8 +912,68 @@
           <context context-type="linenumber">34</context>
         </context-group>
         <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.html</context>
+          <context context-type="linenumber">74</context>
+        </context-group>
+        <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-scrub-modal/osd-scrub-modal.component.html</context>
           <context context-type="linenumber">21</context>
+        </context-group>
+      </trans-unit><trans-unit id="c35f9c5f268a514b970cc55e9a5dc4bed0988e7f" datatype="html">
+        <source>OSD Recovery Priority</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.html</context>
+          <context context-type="linenumber">3</context>
+        </context-group>
+      </trans-unit><trans-unit id="b74af38005e8a8914e45af2ec412e11ceafef8b6" datatype="html">
+        <source>Priority</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.html</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit><trans-unit id="c2f48f04b379bfba133825747adfd238d511412e" datatype="html">
+        <source>Customize priority values</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.html</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit><trans-unit id="4aa19de2a2b54cbda39e9c62917b23044c087776" datatype="html">
+        <source>This field is required!</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.html</context>
+          <context context-type="linenumber">66</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
+          <context context-type="linenumber">68</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
+          <context context-type="linenumber">92</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
+          <context context-type="linenumber">118</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
+          <context context-type="linenumber">166</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/pool-form/pool-form.component.html</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/pool-form/pool-form.component.html</context>
+          <context context-type="linenumber">69</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/pool/pool-form/pool-form.component.html</context>
+          <context context-type="linenumber">95</context>
         </context-group>
       </trans-unit><trans-unit id="272696ff8acdbed0af6dc13f09729e70be435b82" datatype="html">
         <source>Reweight OSD</source>
@@ -950,11 +1018,17 @@
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-scrub-modal/osd-scrub-modal.component.html</context>
           <context context-type="linenumber">13</context>
         </context-group>
-      </trans-unit><trans-unit id="5e5d841e1b1db3f5d3cf9a7549dea652e08856ed" datatype="html">
-        <source>Set Cluster-wide OSD Flags</source>
+      </trans-unit><trans-unit id="4beacb61e2236200b5627677b5c0054d2b482ed4" datatype="html">
+        <source>Set Cluster-wide Flags</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-list/osd-list.component.html</context>
           <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit><trans-unit id="9617df8e0504d997d0ff45b6c206a12becd13c37" datatype="html">
+        <source>Set Cluster-wide Recovery Priority</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/cluster/osd/osd-list/osd-list.component.html</context>
+          <context context-type="linenumber">32</context>
         </context-group>
       </trans-unit><trans-unit id="b49d7877d24112d4bdfce9256edf61a007fae888" datatype="html">
         <source>OSDs List</source>
@@ -967,20 +1041,20 @@
   <x id="START_TAG_STRONG" ctype="x-strong" equiv-text="&lt;strong&gt;"/><x id="INTERPOLATION_1" equiv-text="{{ markActionDescription }}"/><x id="CLOSE_TAG_STRONG" ctype="x-strong" equiv-text="&lt;/strong&gt;"/> if you proceed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-list/osd-list.component.html</context>
-          <context context-type="linenumber">65</context>
+          <context context-type="linenumber">74</context>
         </context-group>
       </trans-unit><trans-unit id="2d3a73f6440a7d896d74356fe0a725d731e71cbb" datatype="html">
         <source>The OSD is not safe to destroy!</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-list/osd-list.component.html</context>
-          <context context-type="linenumber">74</context>
+          <context context-type="linenumber">83</context>
         </context-group>
       </trans-unit><trans-unit id="9d08116242443953ebbfe10bc2092e0a694b4adf" datatype="html">
         <source><x id="START_TAG_STRONG" ctype="x-strong" equiv-text="&lt;strong&gt;"/>OSD <x id="INTERPOLATION" equiv-text="{{ selection.first().id }}"/><x id="CLOSE_TAG_STRONG" ctype="x-strong" equiv-text="&lt;/strong&gt;"/> will be
   <x id="START_TAG_STRONG" ctype="x-strong" equiv-text="&lt;strong&gt;"/><x id="INTERPOLATION_1" equiv-text="{{ actionDescription }}"/><x id="CLOSE_TAG_STRONG" ctype="x-strong" equiv-text="&lt;/strong&gt;"/> if you proceed.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/cluster/osd/osd-list/osd-list.component.html</context>
-          <context context-type="linenumber">76</context>
+          <context context-type="linenumber">85</context>
         </context-group>
       </trans-unit><trans-unit id="d2bcd3296d2850de762fb943060b7e086a893181" datatype="html">
         <source>Health</source>
@@ -999,40 +1073,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
           <context context-type="linenumber">3</context>
-        </context-group>
-      </trans-unit><trans-unit id="4aa19de2a2b54cbda39e9c62917b23044c087776" datatype="html">
-        <source>This field is required!</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
-          <context context-type="linenumber">34</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
-          <context context-type="linenumber">68</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
-          <context context-type="linenumber">92</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
-          <context context-type="linenumber">118</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/erasure-code-profile-form/erasure-code-profile-form.component.html</context>
-          <context context-type="linenumber">166</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/pool-form/pool-form.component.html</context>
-          <context context-type="linenumber">40</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/pool-form/pool-form.component.html</context>
-          <context context-type="linenumber">69</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/pool/pool-form/pool-form.component.html</context>
-          <context context-type="linenumber">95</context>
         </context-group>
       </trans-unit><trans-unit id="9edc2b494e660618af3e5225f68d40b7ca67629c" datatype="html">
         <source>The chosen erasure code profile name is already in use.</source>
@@ -2537,16 +2577,6 @@
           <context context-type="sourcefile">app/ceph/cluster/configuration/configuration-details/configuration-details.component.html</context>
           <context context-type="linenumber">102</context>
         </context-group>
-      </trans-unit><trans-unit id="4f951c2d3472dda85872e7b09fbab383463aa4b5" datatype="html">
-        <source>→ See <x id="START_LINK" ctype="x-a" equiv-text="&lt;a&gt;"/>Logs<x id="CLOSE_LINK" ctype="x-a" equiv-text="&lt;/a&gt;"/> for more details.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">23</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">241</context>
-        </context-group>
       </trans-unit><trans-unit id="73caac4265ea7314ff061e5a1d78a6361a6dd3b8" datatype="html">
         <source>Cluster Status</source>
         <context-group purpose="location">
@@ -2557,73 +2587,73 @@
         <source>Manager Daemons</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">70</context>
+          <context context-type="linenumber">69</context>
         </context-group>
       </trans-unit><trans-unit id="946ac5dea9921dc09d7b0a63b89535371f283b19" datatype="html">
         <source>Object Gateways</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">91</context>
+          <context context-type="linenumber">90</context>
         </context-group>
       </trans-unit><trans-unit id="ff03fa5bcf37c4da46ad736c1f7d03f959e8ba9a" datatype="html">
         <source>Metadata Servers</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">99</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit><trans-unit id="d817609ba4993eba859409ab71e566168f4d5f5a" datatype="html">
         <source>iSCSI Gateways</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">110</context>
+          <context context-type="linenumber">109</context>
         </context-group>
       </trans-unit><trans-unit id="42c13e50391250ea9379bdf55d5d6c0228c0c8bc" datatype="html">
         <source>Client IOPS</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">126</context>
+          <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit><trans-unit id="52213660b2454d139ada3079a42ec6caf3c3c01e" datatype="html">
         <source>Client Throughput</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">135</context>
+          <context context-type="linenumber">134</context>
         </context-group>
       </trans-unit><trans-unit id="32efd1c3f70e3c5244239de97a2cc95d98534a14" datatype="html">
         <source>Client Read/Write</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">144</context>
+          <context context-type="linenumber">143</context>
         </context-group>
       </trans-unit><trans-unit id="5277e7546d03a767761199b70deb8c77a921b390" datatype="html">
         <source>Client Recovery</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">162</context>
+          <context context-type="linenumber">161</context>
         </context-group>
       </trans-unit><trans-unit id="6d9a9f55046891733ef71170e7652063765eb542" datatype="html">
         <source>Scrub</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">171</context>
+          <context context-type="linenumber">170</context>
         </context-group>
       </trans-unit><trans-unit id="3cc9c2ae277393b3946b38c088dabff671b1ee1b" datatype="html">
         <source>Performance</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">120</context>
+          <context context-type="linenumber">119</context>
         </context-group>
       </trans-unit><trans-unit id="88f383269db2d32cccee9e936fe549dccb9fdbf4" datatype="html">
         <source>Raw Capacity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">201</context>
+          <context context-type="linenumber">200</context>
         </context-group>
       </trans-unit><trans-unit id="afdb601c16162f2c798b16a2920955f1cc6a20aa" datatype="html">
         <source>Objects</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">214</context>
+          <context context-type="linenumber">213</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/block/rbd-details/rbd-details.component.html</context>
@@ -2633,19 +2663,25 @@
         <source>PGs per OSD</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">223</context>
+          <context context-type="linenumber">222</context>
         </context-group>
       </trans-unit><trans-unit id="498a109c6e9e94f1966de01aa0326f7f0ac6fb52" datatype="html">
         <source>PG Status</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">232</context>
+          <context context-type="linenumber">231</context>
         </context-group>
       </trans-unit><trans-unit id="ce9dfdc6dccb28dc75a78c704e09dc18fb02dcfa" datatype="html">
         <source>Capacity</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
-          <context context-type="linenumber">182</context>
+          <context context-type="linenumber">181</context>
+        </context-group>
+      </trans-unit><trans-unit id="44ecac93d67c6a671198091c2270354f80322327" datatype="html">
+        <source><x id="START_ITALIC_TEXT" ctype="x-i" equiv-text="&lt;i&gt;"/><x id="CLOSE_ITALIC_TEXT" ctype="x-i" equiv-text="&lt;/i&gt;"/> See <x id="START_LINK" ctype="x-a" equiv-text="&lt;a&gt;"/>Logs<x id="CLOSE_LINK" ctype="x-a" equiv-text="&lt;/a&gt;"/> for more details.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/dashboard/health/health.component.html</context>
+          <context context-type="linenumber">265</context>
         </context-group>
       </trans-unit><trans-unit id="f0b5d789d42c0e69348e5fe0037fcbf5b5fbbdcc" datatype="html">
         <source>Move an image to trash</source>
@@ -3844,6 +3880,59 @@
         <source>Mark <x id="INTERPOLATION" equiv-text="{{markAction}}"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-list/osd-list.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="4edc2162af0bd6cd941eaf730d20a7e3b5a83ba7" datatype="html">
+        <source>Max Backfills</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="eb5e6c24a48a1dfe23e0a772b762be5e949c0c8a" datatype="html">
+        <source>Recovery Max Active</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="4a23c6d3859e03184118620d2baeb736ac765fbf" datatype="html">
+        <source>Recovery Max Single Start</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="97049169ef5228fd1724de2fcdad1fec2858eaf8" datatype="html">
+        <source>Recovery Sleep</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="a5c05002b0ac2040f1aede5e727e0ffd06eda819" datatype="html">
+        <source>Custom</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="92a8cbd0b31b1a5a64fe3a3245437ecf14b6d74d" datatype="html">
+        <source>OSD recovery speed priority &quot;<x id="INTERPOLATION" equiv-text="{{value}}"/>&quot; was set successfully.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="87241d8eb7bf0d14756f27febe8d0a84015627db" datatype="html">
+        <source>OSD recovery speed priority</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/ceph/cluster/osd/osd-recv-speed-modal/osd-recv-speed-modal.component.ts</context>
           <context context-type="linenumber">1</context>
         </context-group>
       </trans-unit>

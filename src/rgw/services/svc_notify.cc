@@ -190,7 +190,7 @@ int RGWSI_Notify::init_watch()
 
     librados::ObjectWriteOperation op;
     op.create(false);
-    r = notify_obj.operate(&op);
+    r = notify_obj.operate(&op, null_yield);
     if (r < 0 && r != -EEXIST) {
       ldout(cct, 0) << "ERROR: notify_obj.operate() returned r=" << r << dendl;
       return r;
@@ -357,7 +357,8 @@ int RGWSI_Notify::distribute(const string& key, bufferlist& bl)
 {
   RGWSI_RADOS::Obj notify_obj = pick_control_obj(key);
 
-  ldout(cct, 10) << "distributing notification oid=" << notify_obj.get_ref().oid << " bl.length()=" << bl.length() << dendl;
+  ldout(cct, 10) << "distributing notification oid=" << notify_obj.get_ref().obj
+      << " bl.length()=" << bl.length() << dendl;
   return robust_notify(notify_obj, bl);
 }
 

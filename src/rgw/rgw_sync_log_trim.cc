@@ -17,6 +17,7 @@
 #include <boost/circular_buffer.hpp>
 #include <boost/container/flat_map.hpp>
 
+#include "include/scope_guard.h"
 #include "common/bounded_key_counter.h"
 #include "common/errno.h"
 #include "rgw_sync_log_trim.h"
@@ -260,34 +261,34 @@ class BucketTrimWatcher : public librados::WatchCtx2 {
     }
 
     // register a watch on the realm's control object
-    r = ref.ioctx.watch2(ref.oid, &handle, this);
+    r = ref.ioctx.watch2(ref.obj.oid, &handle, this);
     if (r == -ENOENT) {
       constexpr bool exclusive = true;
-      r = ref.ioctx.create(ref.oid, exclusive);
+      r = ref.ioctx.create(ref.obj.oid, exclusive);
       if (r == -EEXIST || r == 0) {
-        r = ref.ioctx.watch2(ref.oid, &handle, this);
+        r = ref.ioctx.watch2(ref.obj.oid, &handle, this);
       }
     }
     if (r < 0) {
-      lderr(store->ctx()) << "Failed to watch " << ref.oid
+      lderr(store->ctx()) << "Failed to watch " << ref.obj
           << " with " << cpp_strerror(-r) << dendl;
       ref.ioctx.close();
       return r;
     }
 
-    ldout(store->ctx(), 10) << "Watching " << ref.oid << dendl;
+    ldout(store->ctx(), 10) << "Watching " << ref.obj.oid << dendl;
     return 0;
   }
 
   int restart() {
     int r = ref.ioctx.unwatch2(handle);
     if (r < 0) {
-      lderr(store->ctx()) << "Failed to unwatch on " << ref.oid
+      lderr(store->ctx()) << "Failed to unwatch on " << ref.obj
           << " with " << cpp_strerror(-r) << dendl;
     }
-    r = ref.ioctx.watch2(ref.oid, &handle, this);
+    r = ref.ioctx.watch2(ref.obj.oid, &handle, this);
     if (r < 0) {
-      lderr(store->ctx()) << "Failed to restart watch on " << ref.oid
+      lderr(store->ctx()) << "Failed to restart watch on " << ref.obj
           << " with " << cpp_strerror(-r) << dendl;
       ref.ioctx.close();
     }
@@ -322,7 +323,7 @@ class BucketTrimWatcher : public librados::WatchCtx2 {
     } catch (const buffer::error& e) {
       lderr(store->ctx()) << "Failed to decode notification: " << e.what() << dendl;
     }
-    ref.ioctx.notify_ack(ref.oid, notify_id, cookie, reply);
+    ref.ioctx.notify_ack(ref.obj.oid, notify_id, cookie, reply);
   }
 
   /// reestablish the watch if it gets disconnected
@@ -331,7 +332,7 @@ class BucketTrimWatcher : public librados::WatchCtx2 {
       return;
     }
     if (err == -ENOTCONN) {
-      ldout(store->ctx(), 4) << "Disconnected watch on " << ref.oid << dendl;
+      ldout(store->ctx(), 4) << "Disconnected watch on " << ref.obj << dendl;
       restart();
     }
   }
@@ -580,7 +581,6 @@ class AsyncMetadataList : public RGWAsyncRadosRequest {
   const std::string section;
   const std::string start_marker;
   MetadataListCallback callback;
-  void *handle{nullptr};
 
   int _send_request() override;
  public:
@@ -591,54 +591,55 @@ class AsyncMetadataList : public RGWAsyncRadosRequest {
     : RGWAsyncRadosRequest(caller, cn), cct(cct), mgr(mgr),
       section(section), start_marker(start_marker), callback(callback)
   {}
-  ~AsyncMetadataList() override {
-    if (handle) {
-      mgr->list_keys_complete(handle);
-    }
-  }
 };
 
 int AsyncMetadataList::_send_request()
 {
-  // start a listing at the given marker
-  int r = mgr->list_keys_init(section, start_marker, &handle);
-  if (r < 0) {
-    ldout(cct, 10) << "failed to init metadata listing: "
-        << cpp_strerror(r) << dendl;
-    return r;
-  }
-  ldout(cct, 20) << "starting metadata listing at " << start_marker << dendl;
-
+  void* handle = nullptr;
   std::list<std::string> keys;
   bool truncated{false};
   std::string marker;
 
-  do {
-    // get the next key and marker
-    r = mgr->list_keys_next(handle, 1, keys, &truncated);
-    if (r < 0) {
-      ldout(cct, 10) << "failed to list metadata: "
-          << cpp_strerror(r) << dendl;
-      return r;
-    }
-    marker = mgr->get_marker(handle);
+  // start a listing at the given marker
+  int r = mgr->list_keys_init(section, start_marker, &handle);
+  if (r == -EINVAL) {
+    // restart with empty marker below
+  } else if (r < 0) {
+    ldout(cct, 10) << "failed to init metadata listing: "
+        << cpp_strerror(r) << dendl;
+    return r;
+  } else {
+    ldout(cct, 20) << "starting metadata listing at " << start_marker << dendl;
 
-    if (!keys.empty()) {
-      ceph_assert(keys.size() == 1);
-      auto& key = keys.front();
-      if (!callback(std::move(key), std::move(marker))) {
-        return 0;
+    // release the handle when scope exits
+    auto g = make_scope_guard([=] { mgr->list_keys_complete(handle); });
+
+    do {
+      // get the next key and marker
+      r = mgr->list_keys_next(handle, 1, keys, &truncated);
+      if (r < 0) {
+        ldout(cct, 10) << "failed to list metadata: "
+            << cpp_strerror(r) << dendl;
+        return r;
       }
-    }
-  } while (truncated);
+      marker = mgr->get_marker(handle);
 
-  if (start_marker.empty()) {
-    // already listed all keys
-    return 0;
+      if (!keys.empty()) {
+        ceph_assert(keys.size() == 1);
+        auto& key = keys.front();
+        if (!callback(std::move(key), std::move(marker))) {
+          return 0;
+        }
+      }
+    } while (truncated);
+
+    if (start_marker.empty()) {
+      // already listed all keys
+      return 0;
+    }
   }
 
   // restart the listing from the beginning (empty marker)
-  mgr->list_keys_complete(handle);
   handle = nullptr;
 
   r = mgr->list_keys_init(section, "", &handle);
@@ -649,6 +650,8 @@ int AsyncMetadataList::_send_request()
   }
   ldout(cct, 20) << "restarting metadata listing" << dendl;
 
+  // release the handle when scope exits
+  auto g = make_scope_guard([=] { mgr->list_keys_complete(handle); });
   do {
     // get the next key and marker
     r = mgr->list_keys_next(handle, 1, keys, &truncated);

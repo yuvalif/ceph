@@ -300,7 +300,8 @@ int rgw_bucket_instance_store_info(RGWRados *store, string& entry, bufferlist& b
   return store->meta_mgr->put_entry(bucket_instance_meta_handler, entry, bl, exclusive, objv_tracker, mtime, pattrs);
 }
 
-int rgw_bucket_instance_remove_entry(RGWRados *store, string& entry, RGWObjVersionTracker *objv_tracker) {
+int rgw_bucket_instance_remove_entry(RGWRados *store, const string& entry,
+                                     RGWObjVersionTracker *objv_tracker) {
   return store->meta_mgr->remove_entry(bucket_instance_meta_handler, entry, objv_tracker);
 }
 
@@ -1629,16 +1630,21 @@ int RGWBucketAdminOp::info(RGWRados *store, RGWBucketAdminOpState& op_state,
       return ret;
     }
   } else {
-    RGWAccessHandle handle;
+    void *handle = nullptr;
+    bool truncated = true;
 
     formatter->open_array_section("buckets");
-    if (store->list_buckets_init(&handle) >= 0) {
-      rgw_bucket_dir_entry obj;
-      while (store->list_buckets_next(obj, &handle) >= 0) {
+    ret = store->meta_mgr->list_keys_init("bucket", &handle);
+    while (ret == 0 && truncated) {
+      std::list<std::string> buckets;
+      const int max_keys = 1000;
+      ret = store->meta_mgr->list_keys_next(handle, max_keys, buckets,
+                                            &truncated);
+      for (auto& bucket_name : buckets) {
         if (show_stats)
-          bucket_stats(store, user_id.tenant, obj.key.name, formatter);
+          bucket_stats(store, user_id.tenant, bucket_name, formatter);
         else
-          formatter->dump_string("bucket", obj.key.name);
+          formatter->dump_string("bucket", bucket_name);
       }
     }
 
@@ -2597,7 +2603,8 @@ public:
     RGWListRawObjsCtx ctx;
   };
 
-  int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) override {
+  int remove(RGWRados *store, string& entry,
+	     RGWObjVersionTracker& objv_tracker) override {
     RGWBucketInfo info;
     auto obj_ctx = store->svc.sysobj->init_obj_ctx();
 
@@ -2605,7 +2612,8 @@ public:
     if (ret < 0 && ret != -ENOENT)
       return ret;
 
-    return rgw_bucket_instance_remove_entry(store, entry, &info.objv_tracker);
+    return rgw_bucket_instance_remove_entry(store, entry,
+					    &info.objv_tracker);
   }
 
   void get_pool_and_oid(RGWRados *store, const string& key, rgw_pool& pool, string& oid) override {

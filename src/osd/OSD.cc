@@ -858,20 +858,15 @@ void OSDService::set_injectfull(s_names type, int64_t count)
 void OSDService::set_statfs(const struct store_statfs_t &stbuf)
 {
   uint64_t bytes = stbuf.total;
-  uint64_t used = bytes - stbuf.available;
   uint64_t avail = stbuf.available;
+  uint64_t used = stbuf.get_used_raw();
 
   osd->logger->set(l_osd_stat_bytes, bytes);
   osd->logger->set(l_osd_stat_bytes_used, used);
   osd->logger->set(l_osd_stat_bytes_avail, avail);
 
   std::lock_guard l(stat_lock);
-  osd_stat.kb = bytes >> 10;
-  osd_stat.kb_used = used >> 10;
-  osd_stat.kb_avail = avail >> 10;
-  osd_stat.kb_used_data = stbuf.allocated >> 10;
-  osd_stat.kb_used_omap = stbuf.omap_allocated >> 10;
-  osd_stat.kb_used_meta = stbuf.internal_metadata >> 10;
+  osd_stat.statfs = stbuf;
 }
 
 osd_stat_t OSDService::set_osd_stat(vector<int>& hb_peers,
@@ -1935,6 +1930,9 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, uuid_d fsid, int whoami)
   }
 
 umount_store:
+  if (ch) {
+    ch.reset();
+  }
   store->umount();
 free_store:
   delete store;
@@ -2046,6 +2044,7 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   tick_timer(cct, osd_lock),
   tick_timer_lock("OSD::tick_timer_lock"),
   tick_timer_without_osd_lock(cct, tick_timer_lock),
+  gss_ktfile_client(cct->_conf.get_val<std::string>("gss_ktab_client_file")),
   authorize_handler_cluster_registry(new AuthAuthorizeHandlerRegistry(cct,
 								      cct->_conf->auth_supported.empty() ?
 								      cct->_conf->auth_cluster_required :
@@ -2111,6 +2110,23 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
     &command_tp),
   service(this)
 {
+
+  if (!gss_ktfile_client.empty()) {
+    // Assert we can export environment variable 
+    /* 
+        The default client keytab is used, if it is present and readable,
+        to automatically obtain initial credentials for GSSAPI client
+        applications. The principal name of the first entry in the client
+        keytab is used by default when obtaining initial credentials.
+        1. The KRB5_CLIENT_KTNAME environment variable.
+        2. The default_client_keytab_name profile variable in [libdefaults].
+        3. The hardcoded default, DEFCKTNAME.
+    */
+    const int32_t set_result(setenv("KRB5_CLIENT_KTNAME", 
+                                    gss_ktfile_client.c_str(), 1));
+    ceph_assert(set_result == 0);
+  }
+
   monc->set_messenger(client_messenger);
   op_tracker.set_complaint_and_threshold(cct->_conf->osd_op_complaint_time,
                                          cct->_conf->osd_op_log_threshold);
@@ -2804,7 +2820,7 @@ int OSD::init()
 
   mgrc.set_pgstats_cb([this](){ return collect_pg_stats(); });
   mgrc.set_perf_metric_query_cb(
-      [this](const std::list<OSDPerfMetricQuery> &queries) {
+    [this](const std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> &queries) {
         set_perf_queries(queries);
       },
       [this](std::map<OSDPerfMetricQuery, OSDPerfMetricReport> *reports) {
@@ -4928,9 +4944,10 @@ void OSD::heartbeat()
 
   auto new_stat = service.set_osd_stat(hb_peers, get_num_pgs());
   dout(5) << __func__ << " " << new_stat << dendl;
-  ceph_assert(new_stat.kb);
+  ceph_assert(new_stat.statfs.total);
 
-  float ratio = ((float)new_stat.kb_used) / ((float)new_stat.kb);
+  float ratio =
+   ((float)new_stat.statfs.get_used()) / ((float)new_stat.statfs.total);
   service.check_full_status(ratio);
 
   utime_t now = ceph_clock_now();
@@ -5619,8 +5636,17 @@ bool OSD::_is_healthy()
   }
 
   if (is_waiting_for_healthy()) {
+     utime_t now = ceph_clock_now();
+     utime_t grace = utime_t(cct->_conf->osd_max_markdown_period, 0);
+     while (!osd_markdown_log.empty() &&
+             osd_markdown_log.front() + grace < now)
+       osd_markdown_log.pop_front();
+     if (osd_markdown_log.size() <= 1) {
+       dout(5) << __func__ << " first time marked as down,"
+               << " try reboot unconditionally" << dendl;
+       return true;
+    }
     std::lock_guard l(heartbeat_lock);
-    utime_t now = ceph_clock_now();
     int num = 0, up = 0;
     for (map<int,HeartbeatInfo>::iterator p = heartbeat_peers.begin();
 	 p != heartbeat_peers.end();
@@ -5874,6 +5900,18 @@ void OSD::send_still_alive(epoch_t epoch, int osd, const entity_addrvec_t &addrs
   MOSDFailure *m = new MOSDFailure(monc->get_fsid(), osd, addrs, 0, epoch,
 				   MOSDFailure::FLAG_ALIVE);
   monc->send_mon_message(m);
+}
+
+void OSD::cancel_pending_failures()
+{
+  std::lock_guard l(heartbeat_lock);
+  auto it = failure_pending.begin();
+  while (it != failure_pending.end()) {
+    dout(10) << __func__ << " canceling in-flight failure report for osd."
+             << it->first << dendl;
+    send_still_alive(osdmap->get_epoch(), it->first, it->second.second);
+    failure_pending.erase(it++);
+  }
 }
 
 void OSD::send_beacon(const ceph::coarse_mono_clock::time_point& now)
@@ -7257,9 +7295,13 @@ MPGStats* OSD::collect_pg_stats()
   std::lock_guard lec{min_last_epoch_clean_lock};
   min_last_epoch_clean = osdmap->get_epoch();
   min_last_epoch_clean_pgs.clear();
+
+  std::set<int64_t> pool_set;
   vector<PGRef> pgs;
   _get_pgs(&pgs);
   for (auto& pg : pgs) {
+    auto pool = pg->pg_id.pgid.pool();
+    pool_set.emplace((int64_t)pool);
     if (!pg->is_primary()) {
       continue;
     }
@@ -7268,6 +7310,16 @@ MPGStats* OSD::collect_pg_stats()
 	min_last_epoch_clean = min(min_last_epoch_clean, lec);
 	min_last_epoch_clean_pgs.push_back(pg->pg_id.pgid);
       });
+  }
+  store_statfs_t st;
+  for (auto p : pool_set) {
+    int r = store->pool_statfs(p, &st);
+    if (r == -ENOTSUP) {
+      break;
+    } else {
+      assert(r >= 0);
+      m->pool_stat[p] = st;
+    }
   }
 
   return m;
@@ -7835,6 +7887,7 @@ void OSD::_committed_osd_maps(epoch_t first, epoch_t last, MOSDMap *m)
       // set incarnation so that osd_reqid_t's we generate for our
       // objecter requests are unique across restarts.
       service.objecter->set_client_incarnation(osdmap->get_epoch());
+      cancel_pending_failures();
     }
   }
 
@@ -7976,14 +8029,7 @@ void OSD::_committed_osd_maps(epoch_t first, epoch_t last, MOSDMap *m)
 
   if (do_shutdown) {
     if (network_error) {
-      std::lock_guard l(heartbeat_lock);
-      auto it = failure_pending.begin();
-      while (it != failure_pending.end()) {
-        dout(10) << "handle_osd_ping canceling in-flight failure report for osd."
-		 << it->first << dendl;
-        send_still_alive(osdmap->get_epoch(), it->first, it->second.second);
-        failure_pending.erase(it++);
-      }
+      cancel_pending_failures();
     }
     // trigger shutdown in a different thread
     dout(0) << __func__ << " shutdown OSD via async signal" << dendl;
@@ -9782,15 +9828,17 @@ int OSD::init_op_flags(OpRequestRef& op)
   return 0;
 }
 
-void OSD::set_perf_queries(const std::list<OSDPerfMetricQuery> &queries) {
+void OSD::set_perf_queries(
+    const std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> &queries) {
   dout(10) << "setting " << queries.size() << " queries" << dendl;
 
   std::list<OSDPerfMetricQuery> supported_queries;
-  std::copy_if(queries.begin(), queries.end(),
-               std::back_inserter(supported_queries),
-               [](const OSDPerfMetricQuery &query) {
-                 return !query.key_descriptor.empty();
-               });
+  for (auto &it : queries) {
+    auto &query = it.first;
+    if (!query.key_descriptor.empty()) {
+      supported_queries.push_back(query);
+    }
+  }
   if (supported_queries.size() < queries.size()) {
     dout(1) << queries.size() - supported_queries.size()
             << " unsupported queries" << dendl;
@@ -9799,6 +9847,7 @@ void OSD::set_perf_queries(const std::list<OSDPerfMetricQuery> &queries) {
   {
     Mutex::Locker locker(m_perf_queries_lock);
     m_perf_queries = supported_queries;
+    m_perf_limits = queries;
   }
 
   std::vector<PGRef> pgs;
@@ -9830,7 +9879,7 @@ void OSD::get_perf_reports(
       dps.merge(pg_dps);
     }
   }
-  dps.add_to_reports(reports);
+  dps.add_to_reports(m_perf_limits, reports);
   dout(20) << "reports for " << reports->size() << " queries" << dendl;
 }
 
@@ -10221,6 +10270,7 @@ void OSDShard::unprime_split_children(spg_t parent, unsigned old_pg_num)
 	i.first.get_ancestor(old_pg_num) == parent) {
       dout(10) << __func__ << " parent " << parent << " clearing " << i.first
 	       << dendl;
+      _wake_pg_slot(i.first, i.second.get());
       to_delete.push_back(i.first);
     }
   }

@@ -105,7 +105,6 @@ int RGWSI_SysObj_Core::raw_stat(const rgw_raw_obj& obj, uint64_t *psize, real_ti
     return r;
   }
 
-  map<string, bufferlist> unfiltered_attrset;
   uint64_t size = 0;
   struct timespec mtime_ts;
 
@@ -113,9 +112,7 @@ int RGWSI_SysObj_Core::raw_stat(const rgw_raw_obj& obj, uint64_t *psize, real_ti
   if (objv_tracker) {
     objv_tracker->prepare_op_for_read(&op);
   }
-  if (attrs) {
-    op.getxattrs(&unfiltered_attrset, nullptr);
-  }
+  op.getxattrs(attrs, nullptr);
   if (psize || pmtime) {
     op.stat2(&size, &mtime_ts, nullptr);
   }
@@ -123,7 +120,7 @@ int RGWSI_SysObj_Core::raw_stat(const rgw_raw_obj& obj, uint64_t *psize, real_ti
     op.read(0, cct->_conf->rgw_max_chunk_size, first_chunk, nullptr);
   }
   bufferlist outbl;
-  r = rados_obj.operate(&op, &outbl);
+  r = rados_obj.operate(&op, &outbl, null_yield);
 
   if (epoch) {
     *epoch = rados_obj.get_last_version();
@@ -136,9 +133,6 @@ int RGWSI_SysObj_Core::raw_stat(const rgw_raw_obj& obj, uint64_t *psize, real_ti
     *psize = size;
   if (pmtime)
     *pmtime = ceph::real_clock::from_timespec(mtime_ts);
-  if (attrs) {
-    rgw_filter_attrset(unfiltered_attrset, RGW_ATTR_PREFIX, attrs);
-  }
 
   return 0;
 }
@@ -147,6 +141,7 @@ int RGWSI_SysObj_Core::stat(RGWSysObjectCtxBase& obj_ctx,
                             GetObjState& state,
                             const rgw_raw_obj& obj,
                             map<string, bufferlist> *attrs,
+			    bool raw_attrs,
                             real_time *lastmod,
                             uint64_t *obj_size,
                             RGWObjVersionTracker *objv_tracker)
@@ -162,7 +157,11 @@ int RGWSI_SysObj_Core::stat(RGWSysObjectCtxBase& obj_ctx,
   }
 
   if (attrs) {
-    *attrs = astate->attrset;
+    if (raw_attrs) {
+      *attrs = astate->attrset;
+    } else {
+      rgw_filter_attrset(astate->attrset, RGW_ATTR_PREFIX, attrs);
+    }
     if (cct->_conf->subsys.should_gather<ceph_subsys_rgw, 20>()) {
       map<string, bufferlist>::iterator iter;
       for (iter = attrs->begin(); iter != attrs->end(); ++iter) {
@@ -185,6 +184,7 @@ int RGWSI_SysObj_Core::read(RGWSysObjectCtxBase& obj_ctx,
                             const rgw_raw_obj& obj,
                             bufferlist *bl, off_t ofs, off_t end,
                             map<string, bufferlist> *attrs,
+			    bool raw_attrs,
                             rgw_cache_entry_info *cache_info,
                             boost::optional<obj_version>)
 {
@@ -206,7 +206,11 @@ int RGWSI_SysObj_Core::read(RGWSysObjectCtxBase& obj_ctx,
   map<string, bufferlist> unfiltered_attrset;
 
   if (attrs) {
-    op.getxattrs(&unfiltered_attrset, nullptr);
+    if (raw_attrs) {
+      op.getxattrs(attrs, nullptr);
+    } else {
+      op.getxattrs(&unfiltered_attrset, nullptr);
+    }
   }
 
   RGWSI_RADOS::Obj rados_obj;
@@ -215,7 +219,7 @@ int RGWSI_SysObj_Core::read(RGWSysObjectCtxBase& obj_ctx,
     ldout(cct, 20) << "get_rados_obj() on obj=" << obj << " returned " << r << dendl;
     return r;
   }
-  r = rados_obj.operate(&op, nullptr);
+  r = rados_obj.operate(&op, nullptr, null_yield);
   if (r < 0) {
     ldout(cct, 20) << "rados_obj.operate() r=" << r << " bl.length=" << bl->length() << dendl;
     return r;
@@ -230,7 +234,7 @@ int RGWSI_SysObj_Core::read(RGWSysObjectCtxBase& obj_ctx,
     return -ECANCELED;
   }
 
-  if (attrs) {
+  if (attrs && !raw_attrs) {
     rgw_filter_attrset(unfiltered_attrset, RGW_ATTR_PREFIX, attrs);
   }
 
@@ -262,7 +266,7 @@ int RGWSI_SysObj_Core::get_attr(const rgw_raw_obj& obj,
   int rval;
   op.getxattr(name, dest, &rval);
   
-  r = rados_obj.operate(&op, nullptr);
+  r = rados_obj.operate(&op, nullptr, null_yield);
   if (r < 0)
     return r;
 
@@ -310,7 +314,7 @@ int RGWSI_SysObj_Core::set_attrs(const rgw_raw_obj& obj,
 
   bufferlist bl;
 
-  r = rados_obj.operate(&op);
+  r = rados_obj.operate(&op, null_yield);
   if (r < 0)
     return r;
 
@@ -340,7 +344,7 @@ int RGWSI_SysObj_Core::omap_get_vals(const rgw_raw_obj& obj,
     int rval;
     op.omap_get_vals2(start_after, count, &t, &more, &rval);
   
-    r = rados_obj.operate(&op, nullptr);
+    r = rados_obj.operate(&op, nullptr, null_yield);
     if (r < 0) {
       return r;
     }
@@ -379,7 +383,7 @@ int RGWSI_SysObj_Core::omap_get_all(const rgw_raw_obj& obj, std::map<string, buf
     int rval;
     op.omap_get_vals2(start_after, count, &t, &more, &rval);
   
-    r = rados_obj.operate(&op, nullptr);
+    r = rados_obj.operate(&op, nullptr, null_yield);
     if (r < 0) {
       return r;
     }
@@ -409,7 +413,7 @@ int RGWSI_SysObj_Core::omap_set(const rgw_raw_obj& obj, const std::string& key, 
   if (must_exist)
     op.assert_exists();
   op.omap_set(m);
-  r = rados_obj.operate(&op);
+  r = rados_obj.operate(&op, null_yield);
   return r;
 }
 
@@ -426,7 +430,7 @@ int RGWSI_SysObj_Core::omap_set(const rgw_raw_obj& obj, const std::map<std::stri
   if (must_exist)
     op.assert_exists();
   op.omap_set(m);
-  r = rados_obj.operate(&op);
+  r = rados_obj.operate(&op, null_yield);
   return r;
 }
 
@@ -446,7 +450,7 @@ int RGWSI_SysObj_Core::omap_del(const rgw_raw_obj& obj, const std::string& key)
 
   op.omap_rm_keys(k);
 
-  r = rados_obj.operate(&op);
+  r = rados_obj.operate(&op, null_yield);
   return r;
 }
 
@@ -484,7 +488,7 @@ int RGWSI_SysObj_Core::remove(RGWSysObjectCtxBase& obj_ctx,
   }
 
   op.remove();
-  r = rados_obj.operate(&op);
+  r = rados_obj.operate(&op, null_yield);
   if (r < 0)
     return r;
 
@@ -540,7 +544,7 @@ int RGWSI_SysObj_Core::write(const rgw_raw_obj& obj,
     op.setxattr(name.c_str(), bl);
   }
 
-  r = rados_obj.operate(&op);
+  r = rados_obj.operate(&op, null_yield);
   if (r < 0) {
     return r;
   }
@@ -579,7 +583,7 @@ int RGWSI_SysObj_Core::write_data(const rgw_raw_obj& obj,
     objv_tracker->prepare_op_for_write(&op);
   }
   op.write_full(bl);
-  r = rados_obj.operate(&op);
+  r = rados_obj.operate(&op, null_yield);
   if (r < 0)
     return r;
 

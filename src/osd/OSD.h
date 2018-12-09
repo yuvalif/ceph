@@ -46,6 +46,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <string>
 
 #include "include/unordered_map.h"
 
@@ -1256,6 +1257,8 @@ class OSD : public Dispatcher,
   // Tick timer for those stuff that do not need osd_lock
   Mutex tick_timer_lock;
   SafeTimer tick_timer_without_osd_lock;
+  std::string gss_ktfile_client{};
+
 public:
   // config observer bits
   const char** get_tracked_conf_keys() const override;
@@ -2002,6 +2005,7 @@ protected:
   void requeue_failures();
   void send_failures();
   void send_still_alive(epoch_t epoch, int osd, const entity_addrvec_t &addrs);
+  void cancel_pending_failures();
 
   ceph::coarse_mono_clock::time_point last_sent_beacon;
   Mutex min_last_epoch_clean_lock{"OSD::min_last_epoch_clean_lock"};
@@ -2309,12 +2313,14 @@ public:
   friend class OSDService;
 
 private:
-  void set_perf_queries(const std::list<OSDPerfMetricQuery> &queries);
+  void set_perf_queries(
+      const std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> &queries);
   void get_perf_reports(
       std::map<OSDPerfMetricQuery, OSDPerfMetricReport> *reports);
 
   Mutex m_perf_queries_lock = {"OSD::m_perf_queries_lock"};
   std::list<OSDPerfMetricQuery> m_perf_queries;
+  std::map<OSDPerfMetricQuery, OSDPerfMetricLimits> m_perf_limits;
 };
 
 
