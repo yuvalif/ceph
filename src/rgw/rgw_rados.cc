@@ -1167,6 +1167,10 @@ int RGWRados::init_complete()
   if (ret < 0)
     return ret;
 
+  ret = open_notif_pool_ctx();
+  if (ret < 0)
+    return ret;
+
   pools_initialized = true;
 
   gc = new RGWGC();
@@ -1376,6 +1380,11 @@ int RGWRados::open_objexp_pool_ctx()
 int RGWRados::open_reshard_pool_ctx()
 {
   return rgw_init_ioctx(get_rados_handle(), svc.zone->get_zone_params().reshard_pool, reshard_pool_ctx, true, true);
+}
+
+int RGWRados::open_notif_pool_ctx()
+{
+  return rgw_init_ioctx(get_rados_handle(), svc.zone->get_zone_params().notif_pool, notif_pool_ctx, true, true);
 }
 
 int RGWRados::open_pool_ctx(const rgw_pool& pool, librados::IoCtx& io_ctx,

@@ -1449,6 +1449,94 @@ def test_ps_s3_notification_push_amqp_on_master():
     clean_rabbitmq(proc)
 
 
+def test_ps_s3_persistent_notification_on_master():
+    """ test pushing persistent notification on master """
+    if skip_push_tests:
+        return SkipTest("PubSub push tests don't run in teuthology")
+    hostname = get_ip()
+    proc = init_rabbitmq()
+    if proc is  None:
+        return SkipTest('end2end amqp tests require rabbitmq-server installed')
+    master_zone, _ = init_env(require_ps=False)
+    realm = get_realm()
+    zonegroup = realm.master_zonegroup()
+    
+    # create bucket
+    bucket_name = gen_bucket_name()
+    bucket = master_zone.create_bucket(bucket_name)
+    topic_name = bucket_name + TOPIC_SUFFIX
+
+    # start amqp receivers
+    exchange = 'ex1'
+    task, receiver = create_amqp_receiver_thread(exchange, topic_name)
+    task.start()
+
+    # create two s3 topic
+    endpoint_address = 'amqp://' + hostname
+    # with acks from broker
+    endpoint_args = 'push-endpoint='+endpoint_address+'&amqp-exchange='+exchange+'&amqp-ack-level=broker'+'&persistent=true'
+    topic_conf = PSTopicS3(master_zone.conn, topic_name, zonegroup.name, endpoint_args=endpoint_args)
+    topic_arn = topic_conf.set_config()
+    # create s3 notification
+    notification_name = bucket_name + NOTIFICATION_SUFFIX
+    topic_conf_list = [{'Id': notification_name, 'TopicArn': topic_arn,
+                         'Events': []
+                       }]
+
+    s3_notification_conf = PSNotificationS3(master_zone.conn, bucket_name, topic_conf_list)
+    response, status = s3_notification_conf.set_config()
+    assert_equal(status/100, 2)
+
+    # create objects in the bucket (async)
+    number_of_objects = 10
+    client_threads = []
+    start_time = time.time()
+    for i in range(number_of_objects):
+        key = bucket.new_key(str(i))
+        content = str(os.urandom(1024*1024))
+        thr = threading.Thread(target = set_contents_from_string, args=(key, content,))
+        thr.start()
+        client_threads.append(thr)
+    [thr.join() for thr in client_threads] 
+
+    time_diff = time.time() - start_time
+    print('average time for creation + qmqp notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
+
+    print('wait for 10sec for the messages...')
+    time.sleep(10)
+
+    # check amqp receiver
+    keys = list(bucket.list())
+    print('total number of objects: ' + str(len(keys)))
+    receiver.verify_s3_events(keys, exact_match=True)
+    
+    # delete objects from the bucket
+    client_threads = []
+    start_time = time.time()
+    for key in bucket.list():
+        thr = threading.Thread(target = key.delete, args=())
+        thr.start()
+        client_threads.append(thr)
+    [thr.join() for thr in client_threads] 
+    
+    time_diff = time.time() - start_time
+    print('average time for deletion + amqp notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
+
+    print('wait for 10sec for the messages...')
+    time.sleep(10)
+    
+    # check amqp receiver for deletions
+    receiver.verify_s3_events(keys, exact_match=True, deletions=True)
+
+    # cleanup
+    stop_amqp_receiver(receiver, task)
+    s3_notification_conf.del_config()
+    topic_conf.del_config()
+    # delete the bucket
+    master_zone.delete_bucket(bucket_name)
+    clean_rabbitmq(proc)
+
+
 def test_ps_s3_notification_push_kafka():
     """ test pushing kafka s3 notification on master """
     if skip_push_tests:
@@ -1725,7 +1813,7 @@ def test_ps_s3_notification_multi_delete_on_master():
     if skip_push_tests:
         return SkipTest("PubSub push tests don't run in teuthology")
     hostname = get_ip()
-    zones, _  = init_env(require_ps=False)
+    master_zone, _ = init_env(require_ps=False)
     realm = get_realm()
     zonegroup = realm.master_zonegroup()
     
@@ -1738,13 +1826,13 @@ def test_ps_s3_notification_multi_delete_on_master():
     
     # create bucket
     bucket_name = gen_bucket_name()
-    bucket = zones[0].create_bucket(bucket_name)
+    bucket = master_zone.create_bucket(bucket_name)
     topic_name = bucket_name + TOPIC_SUFFIX
 
     # create s3 topic
     endpoint_address = 'http://'+host+':'+str(port)
     endpoint_args = 'push-endpoint='+endpoint_address
-    topic_conf = PSTopicS3(zones[0].conn, topic_name, zonegroup.name, endpoint_args=endpoint_args)
+    topic_conf = PSTopicS3(master_zone.conn, topic_name, zonegroup.name, endpoint_args=endpoint_args)
     topic_arn = topic_conf.set_config()
     # create s3 notification
     notification_name = bucket_name + NOTIFICATION_SUFFIX
@@ -1752,7 +1840,7 @@ def test_ps_s3_notification_multi_delete_on_master():
                         'TopicArn': topic_arn,
                         'Events': ['s3:ObjectRemoved:*']
                        }]
-    s3_notification_conf = PSNotificationS3(zones[0].conn, bucket_name, topic_conf_list)
+    s3_notification_conf = PSNotificationS3(master_zone.conn, bucket_name, topic_conf_list)
     response, status = s3_notification_conf.set_config()
     assert_equal(status/100, 2)
 
@@ -1770,7 +1858,7 @@ def test_ps_s3_notification_multi_delete_on_master():
     keys = list(bucket.list())
 
     start_time = time.time()
-    delete_all_objects(zones[0].conn, bucket_name)
+    delete_all_objects(master_zone.conn, bucket_name)
     time_diff = time.time() - start_time
     print('average time for deletion + http notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
@@ -1784,7 +1872,7 @@ def test_ps_s3_notification_multi_delete_on_master():
     topic_conf.del_config()
     s3_notification_conf.del_config(notification=notification_name)
     # delete the bucket
-    zones[0].delete_bucket(bucket_name)
+    master_zone.delete_bucket(bucket_name)
     http_server.close()
 
 
