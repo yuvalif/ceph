@@ -6938,17 +6938,9 @@ int RGWRados::block_while_resharding(RGWRados::BucketShard *bs,
 	ldpp_dout(dpp, 10) << __PRETTY_FUNCTION__ <<
 	  ": was able to take reshard lock for bucket " <<
 	  bucket_id << dendl;
-
-	ret = RGWBucketReshard::clear_resharding(dpp, this->store, bucket_info);
-	reshard_lock.unlock();
-
-	if (ret == -ENOENT) {
-	  ldpp_dout(dpp, 5) << __PRETTY_FUNCTION__ <<
-	    " INFO: no need to reset reshard flags; old shards apparently"
-	    " removed after successful resharding of bucket " <<
-	    bucket_id << dendl;
-	  continue;
-	} else if (ret < 0) {
+	ret = RGWBucketReshard::clear_resharding(this->store, bucket_info, dpp);
+	if (ret < 0) {
+	  reshard_lock.unlock();
 	  ldpp_dout(dpp, 0) << __PRETTY_FUNCTION__ <<
 	    " ERROR: failed to clear resharding flags for bucket " <<
 	    bucket_id << ", " << cpp_strerror(-ret) << dendl;
