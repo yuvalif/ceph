@@ -147,17 +147,42 @@ void push_part(WriteOp& op, std::string_view tag,
 
 void trim_part(WriteOp& op,
 	       std::optional<std::string_view> tag,
-	       std::uint64_t ofs, bool exclusive)
+	       std::uint64_t ofs, std::optional<std::uint64_t> start_ofs, 
+         bool& mark_only, 
+         bool& trimmed_completly, 
+         bool exclusive,
+         bs::error_code* ec_out)
 {
   fifo::op::trim_part tp;
 
   tp.tag = tag;
   tp.ofs = ofs;
+  tp.start_ofs = start_ofs;
+  tp.mark_only = mark_only;
   tp.exclusive = exclusive;
 
   bufferlist in;
   encode(tp, in);
-  op.exec(fifo::op::CLASS, fifo::op::TRIM_PART, in);
+  op.exec(fifo::op::CLASS, fifo::op::TRIM_PART, in,
+	  [&mark_only, &trimmed_completly, ec_out](bs::error_code ec, const cb::list& bl) {
+	    if (ec) {
+	      if (ec_out) *ec_out = ec;
+	      return;
+	    }
+
+	    fifo::op::trim_part_reply reply;
+	    auto iter = bl.cbegin();
+	    try {
+	      decode(reply, iter);
+	    } catch (const cb::error& err) {
+	      if (ec_out) *ec_out = ec;
+	      return;
+	    }
+
+      mark_only = reply.mark_only;
+      trimmed_completly = reply.trimmed_completly;
+	  });
+  op.returnvec();
 }
 
 void list_part(ReadOp& op,

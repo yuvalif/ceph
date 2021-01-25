@@ -483,6 +483,169 @@ TEST(FIFO2, TestPushListNoMarker) {
   c.run();
 }
 
+void print_fifo(RCf::FIFO* f, s::yield_context& y) {
+  constexpr auto entries_to_list = 512UL;
+
+  bool more = true;
+  std::optional<std::string> next_marker;
+  while (more) {
+    std::vector<neorados::cls::fifo::list_entry> result;
+		bs::error_code ec;
+    std::tie(result, more) = f->list(entries_to_list, next_marker, y[ec]);
+    if (ec.failed()) {
+      std::cout << "listing entries failed: " << ec.message() << std::endl;
+      return;
+    }
+    if (result.empty()) {
+      std::cout << "no entries to list" << std::endl;
+      return;
+    }
+    
+    const auto first_marker = decode_entry<std::string>(*result.begin()).second;
+    const auto last_marker = decode_entry<std::string>(result.back()).second;
+    std::cout << "listed entries: " << first_marker << " - " << last_marker << std::endl;
+    next_marker = last_marker;
+  }
+}
+
+TEST(FIFO2, TestPushListTrim) {
+  ba::io_context c;
+  auto fifo_id = "fifo"sv;
+
+  s::spawn(c, [&](s::yield_context y) mutable {
+		auto r = R::RADOS::Builder{}.build(c, y);
+		auto pool = create_pool(r, get_temp_pool_name(), y);
+		auto sg = make_scope_guard(
+		  [&] {
+		    r.delete_pool(pool, y);
+		  });
+		R::IOContext ioc(pool);
+		auto f = RCf::FIFO::create(r, ioc, fifo_id, y);
+		static constexpr auto max_entries = 2000U;
+
+		std::vector<std::size_t> hashed_inputs;
+		bs::error_code ec;
+		for (auto i = 0U; i < max_entries; ++i) {
+		  cb::list bl;
+			const auto val = random_string(1024*8, 1024*16);
+			hashed_inputs.push_back(std::hash<std::string>{}(val));
+		  encode(val, bl);
+		  f->push(bl, y[ec]);
+      ASSERT_FALSE(ec.failed());
+		}
+
+    constexpr auto entries_to_list = 512UL;
+
+		bool more = true;
+		std::optional<std::string> next_marker;
+		std::uint64_t index = 0;
+		while (more) {
+			std::vector<neorados::cls::fifo::list_entry> result;
+		  std::tie(result, more) = f->list2(entries_to_list, next_marker, y[ec]);
+      EXPECT_FALSE(ec.failed());
+			
+			const auto size = result.size();
+      EXPECT_GE(entries_to_list, size);
+
+			const auto first_marker = decode_entry<std::string>(*result.begin()).second;
+			std::string marker;
+		  for (const auto& entry : result) {
+		    std::string val;
+		    std::tie(val, marker) = decode_entry<std::string>(entry);
+				EXPECT_EQ(std::hash<std::string>{}(val), hashed_inputs[index++]); 
+		  }
+
+      std::cout << "listed entries: " << first_marker << " - " << marker << std::endl;
+      std::cout << "entries to trim: " << first_marker << " - " << marker << std::endl;
+
+      f->trim(marker, first_marker, false, y[ec]);
+      EXPECT_FALSE(ec.failed());
+
+			next_marker = marker;
+      print_fifo(f.get(), y);
+		}
+		
+    // make sure that the queue is empty
+    std::vector<neorados::cls::fifo::list_entry> result;
+		std::tie(result, more) = f->list(entries_to_list, std::nullopt, y[ec]);
+    EXPECT_FALSE(ec.failed());
+    EXPECT_EQ(0, result.size());
+	});
+  c.run();
+}
+
+TEST(FIFO2, TestOutOfOrderTrim) {
+  ba::io_context c;
+  auto fifo_id = "fifo"sv;
+
+  s::spawn(c, [&](s::yield_context y) mutable {
+		auto r = R::RADOS::Builder{}.build(c, y);
+		auto pool = create_pool(r, get_temp_pool_name(), y);
+		auto sg = make_scope_guard(
+		  [&] {
+		    r.delete_pool(pool, y);
+		  });
+		R::IOContext ioc(pool);
+		auto f = RCf::FIFO::create(r, ioc, fifo_id, y);
+		static constexpr auto max_entries = 2000U;
+
+		std::vector<std::size_t> hashed_inputs;
+		bs::error_code ec;
+		for (auto i = 0U; i < max_entries; ++i) {
+		  cb::list bl;
+			const auto val = random_string(1024*8, 1024*16);
+			hashed_inputs.push_back(std::hash<std::string>{}(val));
+		  encode(val, bl);
+		  f->push(bl, y[ec]);
+      ASSERT_FALSE(ec.failed());
+		}
+
+    constexpr auto entries_to_list = 512UL;
+
+		bool more = true;
+		std::optional<std::string> next_marker;
+		std::uint64_t index = 0;
+    std::vector<std::pair<std::string, std::string>> listed_segments;
+		while (more) {
+			std::vector<neorados::cls::fifo::list_entry> result;
+		  std::tie(result, more) = f->list2(entries_to_list, next_marker, y[ec]);
+      EXPECT_FALSE(ec.failed());
+			
+			const auto size = result.size();
+      EXPECT_GE(entries_to_list, size);
+
+			const auto first_marker = decode_entry<std::string>(*result.begin()).second;
+			std::string marker;
+		  for (const auto& entry : result) {
+		    std::string val;
+		    std::tie(val, marker) = decode_entry<std::string>(entry);
+				EXPECT_EQ(std::hash<std::string>{}(val), hashed_inputs[index++]); 
+		  }
+
+      std::cout << "listed entries: " << first_marker << " - " << marker << std::endl;
+      listed_segments.emplace_back(first_marker, marker);
+			next_marker = marker;
+		}
+
+    std::random_shuffle(listed_segments.begin(), listed_segments.end());
+    for (auto& segment : listed_segments) {
+      std::cout << "entries to trim: " << segment.first << " - " << segment.second << std::endl;
+
+      f->trim(segment.second, segment.first, false, y[ec]);
+      EXPECT_FALSE(ec.failed());
+      print_fifo(f.get(), y);
+    }
+		
+    // make sure that the queue is empty
+    std::vector<neorados::cls::fifo::list_entry> result;
+    std::tie(result, more) = f->list(entries_to_list, std::nullopt, y[ec]);
+    std::cout << ec.message() << std::endl;
+    EXPECT_FALSE(ec.failed());
+    EXPECT_TRUE(result.empty());
+	});
+  c.run();
+}
+
 TEST(FIFO, TestPushTooBig) {
   ba::io_context c;
   auto fifo_id = "fifo"sv;

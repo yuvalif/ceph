@@ -116,7 +116,11 @@ void push_part(WriteOp& op, std::string_view tag,
 	       fu2::unique_function<void(bs::error_code, int)>);
 void trim_part(WriteOp& op, std::optional<std::string_view> tag,
 	       std::uint64_t ofs,
-	       bool exclusive);
+	       std::optional<std::uint64_t> start_ofs,
+         bool& mark_only,
+         bool& trimmed_completly,
+	       bool exclusive,
+         bs::error_code* ec_out);
 void list_part(ReadOp& op,
 	       std::optional<std::string_view> tag,
 	       std::uint64_t ofs,
@@ -152,6 +156,24 @@ struct marker {
     return fmt::format("{:0>20}:{:0>20}", num, ofs);
   }
 };
+
+inline bool operator<(const marker& m1, const marker& m2) {
+  if (m1.num == m2.num) {
+    return m1.ofs < m2.ofs;
+  }
+  return m1.num < m2.num;
+}
+
+inline bool operator>(const marker& m1, const marker& m2) {
+  if (m1.num == m2.num) {
+    return m1.ofs > m2.ofs;
+  }
+  return m1.num > m2.num;
+}
+
+inline bool operator==(const marker& m1, const marker& m2) {
+  return m1.num == m2.num && m1.num == m2.num;
+}
 
 struct list_entry {
   cb::list data;
@@ -636,22 +658,72 @@ public:
 	                    //< markstr, otherwise trim markstr as well.
 	    CT&& ct //< CompletionToken
     ) {
-    auto m = to_marker(markstr);
+    auto end_m = to_marker(markstr);
+
     ba::async_completion<CT, void(bs::error_code)> init(ct);
     auto a = ba::get_associated_allocator(init.completion_handler);
     auto e = ba::get_associated_executor(init.completion_handler);
-    if (!m) {
+    if (!end_m) {
       ldout(r->cct(), 0) << __func__ << "(): failed to parse marker: marker="
 			 << markstr << dendl;
       e.post(ca::bind_handler(std::move(init.completion_handler),
 			      errc::invalid_marker), a);
       return init.result.get();
-    } else {
-      using handler_type = decltype(init.completion_handler);
-      auto t = ceph::allocate_unique<Trimmer<handler_type>>(
-	a, this, m->num, m->ofs, exclusive, std::move(init.completion_handler));
-      t.release()->trim();
     }
+    using handler_type = decltype(init.completion_handler);
+    auto t = ceph::allocate_unique<Trimmer<handler_type>>(a, this, 
+        *end_m,
+        std::nullopt,
+        exclusive,
+        std::move(init.completion_handler));
+    t.release()->trim();
+    return init.result.get();
+  }
+
+  /// Trim entries between two given position
+  /// Signature: (bs::error_code)
+  template<typename CT>
+  auto trim(std::string_view markstr, //< Position to which to trim, inclusive
+      std::string_view start_markstr, // Position from which to trim
+	    bool exclusive, //< If true, trim markers up to but NOT INCLUDING
+	                    //< markstr, otherwise trim markstr as well.
+	    CT&& ct //< CompletionToken
+    ) {
+    auto end_m = to_marker(markstr);
+    auto start_m = to_marker(start_markstr);
+
+    ba::async_completion<CT, void(bs::error_code)> init(ct);
+    auto a = ba::get_associated_allocator(init.completion_handler);
+    auto e = ba::get_associated_executor(init.completion_handler);
+    if (!end_m) {
+      ldout(r->cct(), 0) << __func__ << "(): failed to parse marker: marker="
+			 << markstr << dendl;
+      e.post(ca::bind_handler(std::move(init.completion_handler),
+			      errc::invalid_marker), a);
+      return init.result.get();
+    }
+    if (!start_m) {
+      ldout(r->cct(), 0) << __func__ << "(): failed to parse start marker: marker="
+			 << start_markstr << dendl;
+      e.post(ca::bind_handler(std::move(init.completion_handler),
+			      errc::invalid_marker), a);
+      return init.result.get();
+    }
+    if (start_m && (start_m > end_m || (start_m == end_m && exclusive))) {
+      ldout(r->cct(), 0) << __func__ << "(): empty segment to trim: [" << start_markstr << ", " 
+        << markstr << (exclusive ? ")" : "]") << dendl;
+      e.post(ca::bind_handler(std::move(init.completion_handler),
+			      errc::invalid_marker), a);
+      return init.result.get();
+
+    }
+    using handler_type = decltype(init.completion_handler);
+    auto t = ceph::allocate_unique<Trimmer<handler_type>>(a, this, 
+        *end_m,
+        start_m,
+        exclusive,
+        std::move(init.completion_handler));
+    t.release()->trim();
     return init.result.get();
   }
 
@@ -1154,11 +1226,15 @@ private:
   template<typename CT>
   auto trim_part(int64_t part_num,
 		 uint64_t ofs,
+		 std::optional<uint64_t> start_ofs,
+     bool& mark_only,
+     bool& trimmed_completly,
 		 std::optional<std::string_view> tag,
 		 bool exclusive,
+     bs::error_code* ec_out,
 		 CT&& ct) {
     WriteOp op;
-    cls::fifo::trim_part(op, tag, ofs, exclusive);
+    cls::fifo::trim_part(op, tag, ofs, start_ofs, mark_only, trimmed_completly, exclusive, ec_out);
     return r->execute(info.part_oid(part_num), ioc, std::move(op),
 		      std::forward<CT>(ct));
   }
@@ -1520,12 +1596,20 @@ private:
   template<typename Handler>
   class Trimmer {
     FIFO* f;
-    std::int64_t part_num;
-    std::uint64_t ofs;
+    marker end_m;
+    std::optional<marker> start_m;
     bool exclusive;
     Handler handler;
+    // current part number
     std::int64_t pn;
     int i = 0;
+    // previous part was not trimmed completly
+    // from now on only mark as trimmed
+    bool mark_only{false};
+    bs::error_code ec_out;
+    // previous part was trimmed completly
+    // from now on trim parts there were only marked as trimmed
+    bool trim_marked_parts{false};
 
     void handle(bs::error_code ec) {
       auto h = std::move(handler);
@@ -1540,41 +1624,37 @@ private:
       l.unlock();
       auto a = ba::get_associated_allocator(handler);
       auto e = ba::get_associated_executor(handler, f->get_executor());
-      f->_update_meta(
-	fifo::update{}.tail_part_num(part_num),
-	objv,
-	ca::bind_ea(
-	  e, a,
-	  [this, t = std::unique_ptr<Trimmer>(this)](bs::error_code ec,
-						     bool canceled) mutable {
-	    t.release();
-	    if (canceled)
-	      if (i >= MAX_RACE_RETRIES) {
-		ldout(f->r->cct(), 0)
-		  << "ERROR: " << __func__
-		  << "(): race check failed too many times, likely a bug"
-		  << dendl;
-		handle(errc::raced);
-		return;
-	      }
-	    std::unique_lock l(f->m);
-	    auto tail_part_num = f->info.tail_part_num;
-	    l.unlock();
-	    if (tail_part_num < part_num) {
-	      ++i;
-	      update();
-	      return;
-	    }
-	    handle({});
-	    return;
-	  }));
+      std::cout << "LOG: " << __func__ << "(): trying to update tail part to: " << end_m.num << std::endl;
+      f->_update_meta(fifo::update{}.tail_part_num(end_m.num),
+        objv,
+	      ca::bind_ea(e, a, [this, t = std::unique_ptr<Trimmer>(this)](bs::error_code ec, bool canceled) mutable {
+	        t.release();
+	        if (canceled) {
+	          if (i >= MAX_RACE_RETRIES) {
+            std::cout << "ERROR: " << __func__ << "(): race check failed too many times, likely a bug" << std::endl;
+		          handle(errc::raced);
+		          return;
+	          }
+          }
+	        std::unique_lock l(f->m);
+	        auto tail_part_num = f->info.tail_part_num;
+	        l.unlock();
+	        if (tail_part_num < end_m.num) {
+            std::cout << "LOG: " << __func__ << "(): retry update. tail part: " << tail_part_num << " < " << end_m.num << std::endl;
+	          ++i;
+	          update();
+	          return;
+	        }
+	        handle({});
+	        return;
+	    }));
     }
 
   public:
-    Trimmer(FIFO* f, std::int64_t part_num, std::uint64_t ofs,
+    Trimmer(FIFO* f, const marker& end_m, std::optional<marker> start_m,
 	    bool exclusive, Handler&& handler)
-      : f(f), part_num(part_num), ofs(ofs), exclusive(exclusive),
-	handler(std::move(handler)) {
+      : f(f), end_m(end_m), start_m(start_m), exclusive(exclusive), handler(std::move(handler)) 
+    {
       std::unique_lock l(f->m);
       pn = f->info.tail_part_num;
     }
@@ -1582,54 +1662,120 @@ private:
     void trim() {
       auto a = ba::get_associated_allocator(handler);
       auto e = ba::get_associated_executor(handler, f->get_executor());
-      if (pn < part_num) {
-	std::unique_lock l(f->m);
-	auto max_part_size = f->info.params.max_part_size;
-	l.unlock();
-	f->trim_part(
-	  pn, max_part_size, std::nullopt,
-	  false,
-	  ca::bind_ea(
-	    e, a,
-	    [t = std::unique_ptr<Trimmer>(this),
-	     this](bs::error_code ec) mutable {
-	      t.release();
-	      if (ec && ec != bs::errc::no_such_file_or_directory) {
-		ldout(f->r->cct(), 0)
-		  << __func__ << "(): ERROR: trim_part() on part="
-		  << pn << " returned ec=" << ec.message() << dendl;
-		handle(ec);
-		return;
-	      }
-	      ++pn;
-	      trim();
-	    }));
-	return;
-      }
-      f->trim_part(
-	part_num, ofs, std::nullopt, exclusive,
-	ca::bind_ea(
-	  e, a,
-	  [t = std::unique_ptr<Trimmer>(this),
-	    this](bs::error_code ec) mutable {
-	    t.release();
-	    if (ec && ec != bs::errc::no_such_file_or_directory) {
-	      ldout(f->r->cct(), 0)
-		<< __func__ << "(): ERROR: trim_part() on part=" << part_num
-		<< " returned ec=" << ec.message() << dendl;
-	      handle(ec);
-	      return;
-	    }
+      std::optional<std::uint64_t> start_ofs;
 	    std::unique_lock l(f->m);
-	    auto tail_part_num = f->info.tail_part_num;
+	    const auto tail_part_num = f->info.tail_part_num;
+	    const auto max_part_size = f->info.params.max_part_size;
+      const auto part_header_size = f->part_header_size;
+      const auto head_part_num = f->info.head_part_num;
 	    l.unlock();
-	    if (part_num <= tail_part_num) {
-	      /* don't need to modify meta info */
-	      handle({});
-	      return;
-	    }
-	    update();
-	  }));
+      if (trim_marked_parts) {
+        bool trimmed_completly;
+	      f->trim_part(
+          pn, 0, 0, mark_only, trimmed_completly,
+          std::nullopt,
+	        false,
+          &ec_out,
+	        ca::bind_ea(
+	          e, a,
+	          [&trimmed_completly, head_part_num, t = std::unique_ptr<Trimmer>(this), this](bs::error_code ec) mutable {
+	            t.release();
+	            if (ec && ec != bs::errc::no_such_file_or_directory) {
+                std::cout
+		              << __func__ << "(): ERROR: trim_part() on part="
+		              << pn << " returned ec=" << ec.message() << std::endl;
+		            handle(ec);
+		            return;
+	            }
+              if (trimmed_completly && pn < head_part_num) { 
+	              ++pn;
+	              trim();
+              }
+	          }));
+      }
+
+      if (!start_m) {
+        // if start marker is not provided we assume trimming from 
+        // begginning of the first part
+        start_m = {tail_part_num, part_header_size};
+      }
+      if (pn < end_m.num) {
+        // current part is smaller than the end part to trim
+        if (start_m->num == pn) {
+          // start offset is in current part
+          start_ofs = start_m->ofs;
+          std::cout << "trim " <<(mark_only ? "(mark only) " : "") << "part: " << pn << " from: " << start_ofs << " to end" << std::endl;
+        } else if (start_m->num > pn) {
+          // start marker is in a subsequent part - skip it
+          std::cout << "start marker is in a subsequent part. skip part: " << pn << std::endl;
+          mark_only = true;
+          ++pn;
+          trim();
+          return;
+        } else {
+          // start marker was in a previos part - trim completly
+          start_ofs = 0;
+          std::cout << "trim " << (mark_only ? "(mark only) " : "") << "part: start marker is in a previos part. trim completly part: " << pn << std::endl;
+        }
+        bool dummy;
+	      f->trim_part(
+          pn, max_part_size, start_ofs, mark_only, dummy,
+          std::nullopt,
+	        false,
+          &ec_out,
+	        ca::bind_ea(
+	          e, a,
+	          [t = std::unique_ptr<Trimmer>(this), this](bs::error_code ec) mutable {
+	            t.release();
+	            if (ec && ec != bs::errc::no_such_file_or_directory) {
+              std::cout
+		              << __func__ << "(): ERROR: trim_part() on part="
+		              << pn << " returned ec=" << ec.message() << std::endl;
+		            handle(ec);
+		            return;
+	            }
+	            ++pn;
+	            trim();
+	          }));
+        return;
+      }
+      // trimming the part where the end part to trim is
+      if (start_m->num == end_m.num) {
+        // start markers is also in that part
+        std::cout << "trim " << (mark_only ? "(mark only) " : "")  << "last part: " << end_m.num << " from: " << start_ofs << " to: " << end_m.ofs << std::endl;
+        start_ofs = start_m->ofs;
+      } else {
+        std::cout << "trim " << (mark_only ? "(mark only) " : "") << "last part: " << end_m.num << " from beginning to: " << end_m.ofs << std::endl;
+      }
+      bool trimmed_completly;
+      f->trim_part(end_m.num, end_m.ofs, start_ofs, mark_only, trimmed_completly, std::nullopt, exclusive, &ec_out,
+	      ca::bind_ea(
+	        e, a,
+	        [tail_part_num, t = std::unique_ptr<Trimmer>(this), this](bs::error_code ec) mutable {
+	          t.release();
+	          if (ec && ec != bs::errc::no_such_file_or_directory) {
+            std::cout 
+		            << __func__ << "(): ERROR: trim_part() on part=" << end_m.num
+		            << " returned ec=" << ec.message() << std::endl;
+	            handle(ec);
+	            return;
+	          }
+	          if (end_m.num <= tail_part_num || mark_only) {
+              std::cout << "trim_part(): don't need to modify meta info: trim end part:" << 
+                end_m.num << " tail part: " << tail_part_num << " only mark:" << mark_only << std::endl;
+	            handle({});
+	            return;
+	          }
+            std::cout << "trim_part(): modify meta info: " << end_m.num << " > tail part (" << tail_part_num << ")" << std::endl;
+	          update();
+	        }));
+      // try to trim consequent parts that were possibly marked completly
+      if (trimmed_completly) {
+        ceph_assert(!mark_only);
+        ++pn;
+        trim_marked_parts = true;
+        trim();
+      }
     }
   };
 

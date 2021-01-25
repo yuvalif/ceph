@@ -204,23 +204,52 @@ struct trim_part
   std::optional<std::string> tag;
   std::uint64_t ofs{0};
   bool exclusive = false;
+  std::optional<std::uint64_t> start_ofs;
+  bool mark_only = false;
 
   void encode(ceph::buffer::list& bl) const {
-    ENCODE_START(1, 1, bl);
+    ENCODE_START(2, 1, bl);
     encode(tag, bl);
     encode(ofs, bl);
     encode(exclusive, bl);
+    encode(start_ofs, bl);
+    encode(mark_only, bl);
     ENCODE_FINISH(bl);
   }
   void decode(ceph::buffer::list::const_iterator& bl) {
-    DECODE_START(1, bl);
+    DECODE_START(2, bl);
     decode(tag, bl);
     decode(ofs, bl);
     decode(exclusive, bl);
+    if (struct_v >= 2) {
+      decode(start_ofs, bl);
+      decode(mark_only, bl);
+    }
     DECODE_FINISH(bl);
   }
 };
 WRITE_CLASS_ENCODER(trim_part)
+
+struct trim_part_reply
+{
+  bool mark_only = false;
+  bool trimmed_completly = false;
+
+  void encode(ceph::buffer::list& bl) const {
+    ENCODE_START(1, 1, bl);
+    encode(mark_only, bl);
+    encode(trimmed_completly, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(ceph::buffer::list::const_iterator& bl) {
+    DECODE_START(1, bl);
+    decode(mark_only, bl);
+    decode(trimmed_completly, bl);
+    DECODE_FINISH(bl);
+  }
+
+}; WRITE_CLASS_ENCODER(trim_part_reply)
 
 struct list_part
 {

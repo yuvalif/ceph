@@ -109,7 +109,8 @@ int read_part_header(cls_method_context_t hctx,
   try {
     decode(*part_header, iter);
   } catch (const ceph::buffer::error& err) {
-    CLS_ERR("ERROR: %s: failed decoding part header", __PRETTY_FUNCTION__);
+    CLS_ERR("ERROR: %s: failed decoding part header: %s", __PRETTY_FUNCTION__, err.what());
+    CLS_LOG(5, "%s: bufferlist (size: %u): %s", __PRETTY_FUNCTION__, bl.length(), bl.c_str());
     return -EIO;
   }
 
@@ -763,23 +764,69 @@ int trim_part(cls_method_context_t hctx,
     return -EINVAL;
   }
 
+  op::trim_part_reply reply;
+  reply.mark_only = op.mark_only;
+
+  if (op.start_ofs) {
+    const auto start_ofs = *op.start_ofs;
+
+    // start offset was provided
+    if (op.ofs <= start_ofs) {
+      CLS_ERR("%s: end offset: %lu must be greater than start offset: %lu", __PRETTY_FUNCTION__, op.ofs, start_ofs);
+      return -EINVAL;
+    }
+    if (start_ofs > part_header.min_ofs) {
+      reply.mark_only = true;
+      // not trimming from start 
+      segment_type segment(start_ofs, op.ofs);
+      auto& trimmed_segments = part_header.trimmed_segments;
+      CLS_LOG(5, "%s: segment is marked as trimmed: [%lu, %lu)", __PRETTY_FUNCTION__, segment.lower(), segment.upper());
+      trimmed_segments.insert(std::make_pair(segment, updating_time(ceph::real_clock::now())));
+
+      r = write_part_header(hctx, part_header);
+      if (r < 0) {
+        CLS_ERR("%s: failed to write header: r=%d", __PRETTY_FUNCTION__, r);
+        return r;
+      }
+      return 0;
+    }
+  }
+
   if (op.ofs < part_header.min_ofs) {
+    CLS_LOG(5, "%s: end offset: %lu smaller than min offset: %lu", __PRETTY_FUNCTION__, op.ofs, part_header.min_ofs);
     return 0;
   }
   if (op.exclusive && op.ofs == part_header.min_ofs) {
+    CLS_LOG(5, "%s: end offset: %lu equal min offset: %lu and exclusive", __PRETTY_FUNCTION__, op.ofs, part_header.min_ofs);
     return 0;
   }
 
-  if (op.ofs >= part_header.next_ofs) {
-    if (full_part(part_header)) {
-      /*
-       * trim full part completely: remove object
-       */
+  if (op.mark_only) {
+    // only mark as trimmed
+    segment_type segment(part_header.min_ofs, op.ofs);
+    auto& trimmed_segments = part_header.trimmed_segments;
+    CLS_LOG(5, "%s: segment is marked as trimmed: [%lu, %lu)", __PRETTY_FUNCTION__, segment.lower(), segment.upper());
+    trimmed_segments.insert(std::make_pair(segment, updating_time(ceph::real_clock::now())));
 
+    r = write_part_header(hctx, part_header);
+    if (r < 0) {
+      CLS_ERR("%s: failed to write header: r=%d", __PRETTY_FUNCTION__, r);
+      return r;
+    }
+    return 0;
+  }
+
+  CLS_LOG(5, "%s: try to trimm: %lu - %lu", __PRETTY_FUNCTION__, (op.start_ofs ? *op.start_ofs : 0), op.ofs);
+
+  if (op.ofs >= part_header.next_ofs) {
+    // trim to the end
+    if (full_part(part_header)) {
+      // trim full part completely: remove object
+      CLS_LOG(5, "%s: trimm full part completly", __PRETTY_FUNCTION__);
       r = cls_cxx_remove(hctx);
       if (r < 0) {
         CLS_ERR("%s: ERROR: cls_cxx_remove() returned r=%d", __PRETTY_FUNCTION__, r);
-	return r;
+	      return r;
       }
 
       return 0;
@@ -787,35 +834,68 @@ int trim_part(cls_method_context_t hctx,
 
     part_header.min_ofs = part_header.next_ofs;
     part_header.min_index = part_header.max_index;
-  } else {
-    EntryReader reader(hctx, part_header, op.ofs);
+    return 0;
+  }
 
-    entry_header_pre pre_header;
-    int r = reader.peek_pre_header(&pre_header);
+  // don't trim to the end
+  auto& trimmed_segments = part_header.trimmed_segments;
+  auto end_ofs = op.ofs;
+  const auto end_ofs_it = trimmed_segments.find(end_ofs);
+  if (end_ofs_it != trimmed_segments.end()) {
+    end_ofs = end_ofs_it->first.upper();
+    CLS_LOG(5, "%s: trim offset moved: %lu -> %lu ", __PRETTY_FUNCTION__, op.ofs, end_ofs);
+  }
+
+  if (end_ofs >= part_header.next_ofs) {
+    // trim to the end
+    if (full_part(part_header)) {
+      // trim full part completely: remove object
+      CLS_LOG(5, "%s: trimm full part completly", __PRETTY_FUNCTION__);
+      r = cls_cxx_remove(hctx);
+      if (r < 0) {
+        CLS_ERR("%s: ERROR: cls_cxx_remove() returned r=%d", __PRETTY_FUNCTION__, r);
+	      return r;
+      }
+
+      return 0;
+    }
+
+    part_header.min_ofs = part_header.next_ofs;
+    part_header.min_index = part_header.max_index;
+    return 0;
+  }
+
+  EntryReader reader(hctx, part_header, end_ofs);
+
+  entry_header_pre pre_header;
+  r = reader.peek_pre_header(&pre_header);
+  if (r < 0) {
+    CLS_ERR("%s: ERROR: peek_pre_header() returned r=%d", __PRETTY_FUNCTION__, r);
+    return r;
+  }
+
+  if (op.exclusive) {
+    part_header.min_index = pre_header.index;
+  } else {
+    r = reader.get_next_entry(nullptr, nullptr, nullptr);
     if (r < 0) {
+      CLS_ERR("ERROR: %s: unexpected failure at get_next_entry: r=%d",
+        __PRETTY_FUNCTION__, r);
       return r;
     }
-
-    if (op.exclusive) {
-      part_header.min_index = pre_header.index;
-    } else {
-      r = reader.get_next_entry(nullptr, nullptr, nullptr);
-      if (r < 0) {
-	CLS_ERR("ERROR: %s: unexpected failure at get_next_entry: r=%d",
-		__PRETTY_FUNCTION__, r);
-	return r;
-      }
-      part_header.min_index = pre_header.index + 1;
-    }
-
-    part_header.min_ofs = reader.get_ofs();
+    part_header.min_index = pre_header.index + 1;
   }
+
+  CLS_LOG(5, "%s: trimmed. new min offset is: %lu", __PRETTY_FUNCTION__, part_header.min_ofs);
+  part_header.min_ofs = reader.get_ofs();
 
   r = write_part_header(hctx, part_header);
   if (r < 0) {
     CLS_ERR("%s: failed to write header: r=%d", __PRETTY_FUNCTION__, r);
     return r;
   }
+
+  encode(reply, *out);
 
   return 0;
 }
@@ -893,18 +973,22 @@ int end_offset(cls_method_context_t hctx, const part_header& part_header, std::u
     std::uint64_t& end_ofs) {
 	
 	end_ofs = part_header.last_ofs;
+  CLS_LOG(5, "%s: offset: %lu max entries: %u last offset: %lu", __PRETTY_FUNCTION__, start_ofs, max_entries, end_ofs);
+  if (start_ofs >= end_ofs) {
+    CLS_ERR("%s: start offset: %lu is out of bounds (%lu)", __PRETTY_FUNCTION__, start_ofs, end_ofs);
+    return -EINVAL;
+  }
 
-  CLS_LOG(5, "%s: offset: %lu max entries: %u", __PRETTY_FUNCTION__, start_ofs, max_entries);
   EntryReader reader(hctx, part_header, start_ofs);
 
-  if (start_ofs >= part_header.min_ofs &&
+  /*if (start_ofs >= part_header.min_ofs &&
       !reader.end()) {
     auto r = reader.get_next_entry(nullptr, nullptr, nullptr);
     if (r < 0) {
       CLS_ERR("ERROR: %s: unexpected failure at get_next_entry: r=%d", __PRETTY_FUNCTION__, r);
       return r;
     }
-  }
+  }*/
 
   max_entries = std::min(max_entries, op::MAX_LIST_ENTRIES);
 
@@ -961,7 +1045,7 @@ int get_part_visible_offset(cls_method_context_t hctx, ceph::buffer::list* in,
     auto iter = in->cbegin();
     decode(op, iter);
   } catch (const buffer::error &err) {
-    CLS_ERR("ERROR: %s: failed to decode request", __PRETTY_FUNCTION__);
+    CLS_ERR("ERROR: %s: failed to decode request: %s", __PRETTY_FUNCTION__, err.what());
     return -EINVAL;
   }
 
@@ -978,6 +1062,12 @@ int get_part_visible_offset(cls_method_context_t hctx, ceph::buffer::list* in,
     return -EINVAL;
   }
 
+  if (op.ofs >= part_header.last_ofs || op.max_entries == 0) {
+    // empty segment
+    CLS_ERR("%s: empty segment with start offset: %lu", __PRETTY_FUNCTION__, op.ofs);
+    return -EINVAL;
+  }
+
   op::get_part_visible_offset_reply reply;
 
   const auto max_entries = std::min(op.max_entries, op::MAX_LIST_ENTRIES);
@@ -985,6 +1075,8 @@ int get_part_visible_offset(cls_method_context_t hctx, ceph::buffer::list* in,
   std::uint64_t end_ofs;
   segment_type segment;
   auto& listed_segments = part_header.listed_segments;
+  auto& trimmed_segments = part_header.trimmed_segments;
+  const auto combined_segments = listed_segments + trimmed_segments;
 
   while(true) {
     CLS_LOG(5, "%s: find end offset for start offset: %lu. with: %u entries", __PRETTY_FUNCTION__, start_ofs, max_entries);
@@ -992,12 +1084,13 @@ int get_part_visible_offset(cls_method_context_t hctx, ceph::buffer::list* in,
     if (r < 0) {
       return r;
     }
+
     segment = segment_type(start_ofs, end_ofs);
     
     CLS_LOG(5, "%s: requested segment is: [%lu, %lu)", __PRETTY_FUNCTION__, segment.lower(), segment.upper());
     
-    auto segment_it = listed_segments.find(segment);
-    if (segment_it == listed_segments.end()) {
+    auto segment_it = combined_segments.find(segment);
+    if (segment_it == combined_segments.end()) {
       CLS_LOG(5, "%s: requested segment: [%lu, %lu) was not yet listed", 
         __PRETTY_FUNCTION__, segment.lower(), segment.upper());
       break;
@@ -1011,9 +1104,9 @@ int get_part_visible_offset(cls_method_context_t hctx, ceph::buffer::list* in,
       // partially overlapping segment, returning non-overlapping left side
       break;
     }
-    // trying on the right side of the overlapping segment
+    // completly ovarlapping segmenst - trying on the right side of the overlapping segment
     start_ofs = segment_it->first.upper();
-    if (start_ofs == end_ofs) {
+    if (start_ofs >= part_header.last_ofs) {
       // no need to retry more, move to next part
       reply.invisible_part = true;
       reply.ofs = 0;
@@ -1026,7 +1119,7 @@ int get_part_visible_offset(cls_method_context_t hctx, ceph::buffer::list* in,
   
   reply.ofs = segment.lower();
   CLS_LOG(5, "%s: listed segment is: [%lu, %lu)", __PRETTY_FUNCTION__, segment.lower(), segment.upper());
-  listed_segments.insert(std::make_pair(segment, ceph::real_clock::now()));
+  listed_segments.insert(std::make_pair(segment, updating_time(ceph::real_clock::now())));
 
   r = write_part_header(hctx, part_header);
   if (r < 0) {
