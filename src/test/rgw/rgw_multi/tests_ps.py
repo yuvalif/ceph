@@ -187,7 +187,7 @@ class AMQPReceiver(object):
         if external_endpoint_address:
             params = pika.URLParameters(external_endpoint_address, ssl_options=ssl_options)
         else:
-            hostname = get_ip()
+            hostname = 'localhost'
             params = pika.ConnectionParameters(host=hostname, port=rabbitmq_port, ssl_options=ssl_options)
         remaining_retries = 10
         while remaining_retries > 0:
@@ -374,23 +374,12 @@ def verify_s3_records_by_elements(records, keys, exact_match=False, deletions=Fa
 
 def init_rabbitmq():
     """ start a rabbitmq broker """
-    hostname = get_ip()
-    #port = str(random.randint(20000, 30000))
-    #data_dir = './' + port + '_data'
-    #log_dir = './' + port + '_log'
-    #print('')
-    #try:
-    #    os.mkdir(data_dir)
-    #    os.mkdir(log_dir)
-    #except:
-    #    print('rabbitmq directories already exists')
-    #env = {'RABBITMQ_NODE_PORT': port,
-    #       'RABBITMQ_NODENAME': 'rabbit'+ port + '@' + hostname,
-    #       'RABBITMQ_USE_LONGNAME': 'true',
-    #       'RABBITMQ_MNESIA_BASE': data_dir,
-    #       'RABBITMQ_LOG_BASE': log_dir}
-    # TODO: support multiple brokers per host using env
-    # make sure we don't collide with the default
+    # cleanup previos executions
+    try:
+        subprocess.call(['sudo', 'rabbitmqctl', 'stop'])
+    except:
+        log.info('rabbitmq server not running')
+    hostname = 'localgost'
     try:
         proc = subprocess.Popen(['sudo', '--preserve-env=RABBITMQ_CONFIG_FILE', 'rabbitmq-server'])
     except Exception as error:
@@ -399,10 +388,10 @@ def init_rabbitmq():
         return None
     # TODO add rabbitmq checkpoint instead of sleep
     time.sleep(5)
-    return proc #, port, data_dir, log_dir
+    return proc
 
 
-def clean_rabbitmq(proc): #, data_dir, log_dir)
+def clean_rabbitmq(proc):
     """ stop the rabbitmq broker """
     try:
         subprocess.call(['sudo', 'rabbitmqctl', 'stop'])
@@ -410,12 +399,6 @@ def clean_rabbitmq(proc): #, data_dir, log_dir)
         proc.terminate()
     except:
         log.info('rabbitmq server already terminated')
-    # TODO: add directory cleanup once multiple brokers are supported
-    #try:
-    #    os.rmdir(data_dir)
-    #    os.rmdir(log_dir)
-    #except:
-    #    log.info('rabbitmq directories already removed')
 
 
 # Kafka endpoint functions
@@ -3480,12 +3463,13 @@ def test_ps_creation_triggers():
         key.delete()
     master_zone.delete_bucket(bucket_name)
 
+
 def ps_s3_creation_triggers_on_master(external_endpoint_address=None, ca_location=None, verify_ssl='true'):
     """ test object creation s3 notifications in using put/copy/post on master"""
     if skip_push_tests:
         return SkipTest("PubSub push tests don't run in teuthology")
     if not external_endpoint_address:
-        hostname = get_ip()
+        hostname = 'localhost'
         proc = init_rabbitmq()
         if proc is  None:
             return SkipTest('end2end amqp tests require rabbitmq-server installed')
