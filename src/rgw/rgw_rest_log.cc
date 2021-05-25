@@ -937,6 +937,20 @@ void RGWOp_BILog_Status::execute(optional_yield y)
   const auto source_zone = s->info.args.get("source-zone");
   const auto source_key = s->info.args.get("source-bucket");
   auto key = s->info.args.get("bucket");
+  bool gen_specified = false;
+  const std::string gen_str = s->info.args.get("generation", &gen_specified);
+  
+  std::string err;
+  uint64_t gen = 0;
+  if (gen_specified) {
+    gen = strict_strtoll(gen_str.c_str(), 10, &err);
+    if (!err.empty()) {
+      ldpp_dout(this, 4) << "Error parsing generation param '" << gen_str << "'. error: " << err << dendl;
+      op_ret = -EINVAL;
+      return;
+    }
+  }
+
   if (key.empty()) {
     key = source_key;
   }
@@ -988,7 +1002,7 @@ void RGWOp_BILog_Status::execute(optional_yield y)
     ldpp_dout(this, 20) << "RGWOp_BILog_Status::execute(optional_yield y): getting sync status for pipe=" << pipe << dendl;
 
     op_ret = rgw_read_bucket_inc_sync_status(this, static_cast<rgw::sal::RadosStore*>(store),
-					     pipe, bucket->get_info(), nullptr, &status);
+					     pipe, bucket->get_info(), nullptr, gen, &status);
 
     if (op_ret < 0) {
       ldpp_dout(this, -1) << "ERROR: rgw_bucket_sync_status() on pipe=" << pipe << " returned ret=" << op_ret << dendl;
@@ -1038,7 +1052,7 @@ void RGWOp_BILog_Status::execute(optional_yield y)
     }
 
     int r = rgw_read_bucket_inc_sync_status(this, static_cast<rgw::sal::RadosStore*>(store),
-					    pipe, *pinfo, &bucket->get_info(), &current_status);
+					    pipe, *pinfo, &bucket->get_info(), gen, &current_status);
     if (r < 0) {
       ldpp_dout(this, -1) << "ERROR: rgw_bucket_sync_status() on pipe=" << pipe << " returned ret=" << r << dendl;
       op_ret = r;

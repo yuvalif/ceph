@@ -682,7 +682,7 @@ public:
                      const RGWBucketInfo& source_bucket_info,
                      const rgw_bucket& dest_bucket);
 
-  RGWCoroutine *read_sync_status_cr(int num, rgw_bucket_shard_sync_info *sync_status);
+  RGWCoroutine *read_sync_status_cr(int num, uint64_t gen, rgw_bucket_shard_sync_info *sync_status);
   RGWCoroutine *init_sync_status_cr(RGWObjVersionTracker& objv_tracker);
   RGWCoroutine *run_sync_cr(int num);
 
@@ -746,7 +746,8 @@ public:
                                 const rgw_bucket& source_bucket,
                                 const rgw_bucket& dest_bucket);
   static string inc_status_oid(const rgw_zone_id& source_zone,
-                               const rgw_bucket_sync_pair_info& bs);
+                               const rgw_bucket_sync_pair_info& bs,
+                               uint64_t gen);
   // specific source obj sync status, can be used by sync modules
   static string obj_status_oid(const rgw_bucket_sync_pipe& sync_pipe,
                                const rgw_zone_id& source_zone, const rgw::sal::Object* obj); /* specific source obj sync status,
@@ -757,7 +758,7 @@ public:
   unsigned get_subsys() const override;
   std::ostream& gen_prefix(std::ostream& out) const override;
 
-  int read_sync_status(const DoutPrefixProvider *dpp);
+  int read_sync_status(const DoutPrefixProvider *dpp, uint64_t gen);
   int run(const DoutPrefixProvider *dpp);
 };
 
@@ -774,6 +775,7 @@ int rgw_read_bucket_inc_sync_status(const DoutPrefixProvider *dpp,
                                     const rgw_sync_bucket_pipe& pipe,
                                     const RGWBucketInfo& dest_bucket_info,
                                     const RGWBucketInfo *psource_bucket_info,
+                                    uint64_t gen,
                                     std::vector<rgw_bucket_shard_sync_info> *status);
 
 class RGWDefaultSyncModule : public RGWSyncModule {

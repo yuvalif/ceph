@@ -2300,7 +2300,7 @@ static int bucket_source_sync_status(const DoutPrefixProvider *dpp, rgw::sal::Ra
   }
 
   std::vector<rgw_bucket_shard_sync_info> status;
-  r = rgw_read_bucket_inc_sync_status(dpp, store, pipe, bucket_info, &source_bucket->get_info(), &status);
+  r = rgw_read_bucket_inc_sync_status(dpp, store, pipe, bucket_info, &source_bucket->get_info(), full_status.incremental_gen,  &status);
   if (r < 0) {
     lderr(store->ctx()) << "failed to read bucket incremental sync status: " << cpp_strerror(r) << dendl;
     return r;
@@ -8108,7 +8108,34 @@ next:
       cerr << "ERROR: sync.init() returned ret=" << ret << std::endl;
       return -ret;
     }
-    ret = sync.read_sync_status(dpp());
+
+    rgw_bucket_sync_status full_status;
+    RGWBucketSyncPolicyHandlerRef handler;
+    const auto& sources = handler->get_sources();
+    const auto source_it = sources.find(source_zone);
+    if (source_it == sources.end()) {
+      cerr << "ERROR: source zone: '" << source_zone << "' could not be found" << std::endl;
+      return 0;
+    }
+    const auto& pipes = source_it->second;
+    if (pipes.pipe_map.empty()) {
+      cerr << "ERROR: no destination zones for source zone: '" << source_zone << "'" << std::endl;
+      return 0;
+    }
+    const auto& pipe = pipes.pipe_map.begin()->second;
+
+    ret = rgw_read_bucket_full_sync_status(dpp(), static_cast<rgw::sal::RadosStore*>(store), pipe, &full_status, null_yield);
+    if (ret < 0) {
+      cerr << "ERROR: reading bucket full sync status returned ret= " << ret << std::endl;
+      return -ret;
+    }
+
+    if (full_status.state != BucketSyncState::Incremental) {
+      cerr << "cannot sync markers for non incremental status= " << full_status.state << std::endl;
+      return 0;
+    }
+
+    ret = sync.read_sync_status(dpp(), 0);//full_status.incremental_gen);
     if (ret < 0) {
       cerr << "ERROR: sync.read_sync_status() returned ret=" << ret << std::endl;
       return -ret;
