@@ -3,6 +3,7 @@ tasks:
     client.0:
 - notification-tests:
     client.0:
-      force-branch: master
+      force-branch: wip-yuval-testing3
+      git_remote: https://github.com/yuvalif/
       extra_attr: ["amqp_test"]
       rgw_server: client.0
