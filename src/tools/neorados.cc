@@ -93,14 +93,14 @@ void lspools(R::RADOS& r, const std::vector<std::string>&,
 void ls(R::RADOS& r, const std::vector<std::string>& p, s::yield_context y)
 {
   const auto& pname = p[0];
-  const auto pool = lookup_pool(r, pname, y);
+  const R::IOContext pool{ lookup_pool(r, pname, y), R::all_nspaces, {} };
 
   std::vector<R::Entry> ls;
   R::Cursor next = R::Cursor::begin();
   bs::error_code ec;
   do {
     std::tie(ls, next) = r.enumerate_objects(pool, next, R::Cursor::end(),
-					     1000, {}, y[ec], R::all_nspaces);
+					     1000, {}, y[ec]);
     if (ec)
       throw bs::system_error(ec, fmt::format("when listing {}", pname));
     printseq(ls, std::cout);
