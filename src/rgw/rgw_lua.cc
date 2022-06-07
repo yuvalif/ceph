@@ -26,6 +26,9 @@ context to_context(const std::string& s)
   if (strcasecmp(s.c_str(), "background") == 0) {
     return context::background;
   }
+  if (strcasecmp(s.c_str(), "data") == 0) {
+    return context::data;
+  }
   return context::none;
 }
 
@@ -38,6 +41,8 @@ std::string to_string(context ctx)
       return "postrequest";
     case context::background:
       return "background";
+    case context::data:
+      return "data";
     case context::none:
       break;
   }

@@ -52,6 +52,8 @@
 #include "rgw_notify_event_type.h"
 #include "rgw_sal.h"
 #include "rgw_sal_rados.h"
+#include "rgw_lua_filter.h"
+#include "rgw_lua.h"
 
 #include "services/svc_zone.h"
 #include "services/svc_quota.h"
@@ -2087,6 +2089,20 @@ int RGWGetObj::get_data_cb(bufferlist& bl, off_t bl_ofs, off_t bl_len)
   return send_response_data(bl, bl_ofs, bl_len);
 }
 
+int RGWGetObj::get_lua_filter(std::unique_ptr<RGWGetObj_Filter>* filter, RGWGetObj_Filter* cb) {
+  std::string script;
+  const auto rc = rgw::lua::read_script(s, store, s->bucket_tenant, s->yield, rgw::lua::context::data, script);
+  if (rc == -ENOENT) {
+    // no script, nothing to do
+    return 0;
+  } else if (rc < 0) {
+    ldpp_dout(this, 5) << "WARNING: failed to read data script. error: " << rc << dendl;
+    return rc;
+  }
+  filter->reset(new rgw::lua::RGWGetObjFilter(s, s->cct, script, cb));
+  return 0;
+}
+
 bool RGWGetObj::prefetch_data()
 {
   /* HEAD request, stop prefetch*/
@@ -2138,6 +2154,7 @@ void RGWGetObj::execute(optional_yield y)
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
   boost::optional<RGWGetObj_Decompress> decompress;
   std::unique_ptr<RGWGetObj_Filter> decrypt;
+  std::unique_ptr<RGWGetObj_Filter> run_lua;
   map<string, bufferlist>::iterator attr_iter;
 
   perfcounter->inc(l_rgw_get);
@@ -2282,6 +2299,15 @@ void RGWGetObj::execute(optional_yield y)
                                     attr_iter != attrs.end() ? &(attr_iter->second) : nullptr);
   if (decrypt != nullptr) {
     filter = decrypt.get();
+  }
+  if (op_ret < 0) {
+    goto done_err;
+  }
+
+  // run lua script on decompressed and decrypted data
+  op_ret = get_lua_filter(&run_lua, filter);
+  if (run_lua != nullptr) {
+    filter = run_lua.get();
   }
   if (op_ret < 0) {
     goto done_err;
@@ -3845,6 +3871,20 @@ static CompressorRef get_compressor_plugin(const req_state *s,
   return Compressor::create(s->cct, alg);
 }
 
+int RGWPutObj::get_lua_filter(std::unique_ptr<rgw::sal::DataProcessor>* filter, rgw::sal::DataProcessor* cb) {
+  std::string script;
+  const auto rc = rgw::lua::read_script(s, store, s->bucket_tenant, s->yield, rgw::lua::context::data, script);
+  if (rc == -ENOENT) {
+    // no script, nothing to do
+    return 0;
+  } else if (rc < 0) {
+    ldpp_dout(this, 5) << "WARNING: failed to read data script. error: " << rc << dendl;
+    return rc;
+  }
+  filter->reset(new rgw::lua::RGWPutObjFilter(s, s->cct, script, cb));
+  return 0;
+}
+
 void RGWPutObj::execute(optional_yield y)
 {
   char supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1];
@@ -4042,8 +4082,16 @@ void RGWPutObj::execute(optional_yield y)
   boost::optional<RGWPutObj_Compress> compressor;
 
   std::unique_ptr<rgw::sal::DataProcessor> encrypt;
+  std::unique_ptr<rgw::sal::DataProcessor> run_lua;
 
   if (!append) { // compression and encryption only apply to full object uploads
+    op_ret = get_lua_filter(&run_lua, filter);
+    if (op_ret < 0) {
+      return;
+    }
+    if (run_lua) {
+      filter = &*run_lua;
+    }
     op_ret = get_encrypt_filter(&encrypt, filter);
     if (op_ret < 0) {
       return;
