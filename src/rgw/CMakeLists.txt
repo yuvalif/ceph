@@ -162,6 +162,7 @@ set(librgw_common_srcs
   cls_fifo_legacy.cc
   rgw_lua_utils.cc
   rgw_lua.cc
+  rgw_lua_filter.cc
   rgw_bucket_encryption.cc
   rgw_tracer.cc
   rgw_lua_background.cc)
