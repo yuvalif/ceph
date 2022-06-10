@@ -744,6 +744,12 @@ struct RequestMetaTable : public EmptyMetaTable {
   }
 };
 
+void create_top_metatable(lua_State* L, req_state* s, const char* op_name) {
+  create_metatable<RequestMetaTable>(L, true, s, const_cast<char*>(op_name));
+  lua_getglobal(L, RequestMetaTable::TableName().c_str());
+  ceph_assert(lua_istable(L, -1));
+}
+
 int execute(
     rgw::sal::Store* store,
     RGWREST* rest,

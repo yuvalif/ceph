@@ -7,27 +7,24 @@ class DoutPrefixProvider;
 namespace rgw::lua {
 
 class RGWObjFilter {
-  const DoutPrefixProvider* const dpp;
-  CephContext* const cct;
+  req_state* const s;
   const std::string script;
 
 public:
-  RGWObjFilter(const DoutPrefixProvider *dpp,
-                         CephContext* cct,
-                         const std::string& script) : 
-    dpp(dpp), cct(cct), script(script) {}
+  RGWObjFilter(req_state* s,
+      const std::string& script) : 
+    s(s), script(script) {}
 
-  int execute(bufferlist& bl) const;
+  int execute(bufferlist& bl, const char* op_name) const;
 };
 
 class RGWGetObjFilter : public RGWGetObj_Filter {
   const RGWObjFilter filter;
 
 public:
-  RGWGetObjFilter(const DoutPrefixProvider *dpp,
-      CephContext* cct,
+  RGWGetObjFilter(req_state* s,
       const std::string& script,
-      RGWGetObj_Filter* next) : RGWGetObj_Filter(next), filter(dpp, cct, script) 
+      RGWGetObj_Filter* next) : RGWGetObj_Filter(next), filter(s, script) 
   {}
 
   ~RGWGetObjFilter() override = default;
@@ -42,10 +39,9 @@ class RGWPutObjFilter : public rgw::putobj::Pipe {
   const RGWObjFilter filter;
 
 public:
-  RGWPutObjFilter(const DoutPrefixProvider *dpp,
-      CephContext* cct,
+  RGWPutObjFilter(req_state* s,
       const std::string& script,
-      rgw::sal::DataProcessor* next) : rgw::putobj::Pipe(next), filter(dpp, cct, script) 
+      rgw::sal::DataProcessor* next) : rgw::putobj::Pipe(next), filter(s, script) 
   {}
 
   ~RGWPutObjFilter() override = default;
