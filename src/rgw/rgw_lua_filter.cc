@@ -1,6 +1,7 @@
 #include "rgw_lua_filter.h"
 #include "rgw_lua_utils.h"
 #include "rgw_lua_request.h"
+#include "rgw_lua_background.h"
 #include <lua.hpp>
 
 namespace rgw::lua {
@@ -94,6 +95,12 @@ int RGWObjFilter::execute(bufferlist& bl, const char* op_name) const {
   ceph_assert(lua_istable(L, -1));
 
   request::create_top_metatable(L, s, op_name);
+
+  if (s->lua_background) {
+    s->lua_background->create_background_metatable(L);
+    lua_getglobal(L, rgw::lua::RGWTable::TableName().c_str());
+    ceph_assert(lua_istable(L, -1));
+  }
 
   try {
     // execute the lua script
