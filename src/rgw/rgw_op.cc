@@ -2099,7 +2099,7 @@ int RGWGetObj::get_lua_filter(std::unique_ptr<RGWGetObj_Filter>* filter, RGWGetO
     ldpp_dout(this, 5) << "WARNING: failed to read data script. error: " << rc << dendl;
     return rc;
   }
-  filter->reset(new rgw::lua::RGWGetObjFilter(s, s->cct, script, cb));
+  filter->reset(new rgw::lua::RGWGetObjFilter(s, script, cb));
   return 0;
 }
 
@@ -3881,7 +3881,7 @@ int RGWPutObj::get_lua_filter(std::unique_ptr<rgw::sal::DataProcessor>* filter, 
     ldpp_dout(this, 5) << "WARNING: failed to read data script. error: " << rc << dendl;
     return rc;
   }
-  filter->reset(new rgw::lua::RGWPutObjFilter(s, s->cct, script, cb));
+  filter->reset(new rgw::lua::RGWPutObjFilter(s, script, cb));
   return 0;
 }
 
