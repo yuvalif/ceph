@@ -2481,6 +2481,8 @@ static void sync_status(Formatter *formatter)
   cout << std::setw(width) << "realm" << std::setw(1) << " " << realm.get_id() << " (" << realm.get_name() << ")" << std::endl;
   cout << std::setw(width) << "zonegroup" << std::setw(1) << " " << zonegroup.get_id() << " (" << zonegroup.get_name() << ")" << std::endl;
   cout << std::setw(width) << "zone" << std::setw(1) << " " << zone.id << " (" << zone.name << ")" << std::endl;
+  cout << std::setw(width) << "current time" << std::setw(1) << " "
+       << to_iso_8601(ceph::real_clock::now(), iso_8601_format::YMDhms) << std::endl;
 
   cout << std::setw(width) << "zonegroup features enabled: " << zonegroup.enabled_features << std::endl;
   if (auto d = get_disabled_features(zonegroup.enabled_features); !d.empty()) {
@@ -2871,7 +2873,10 @@ static int bucket_sync_status(rgw::sal::RadosStore* store, const RGWBucketInfo& 
   out << indented{width, "realm"} << realm.get_id() << " (" << realm.get_name() << ")\n";
   out << indented{width, "zonegroup"} << zonegroup.get_id() << " (" << zonegroup.get_name() << ")\n";
   out << indented{width, "zone"} << zone.id << " (" << zone.name << ")\n";
-  out << indented{width, "bucket"} << info.bucket << "\n\n";
+  out << indented{width, "bucket"} << info.bucket << "\n";
+  out << indented{width, "current time"}
+    << to_iso_8601(ceph::real_clock::now(), iso_8601_format::YMDhms) << "\n\n";
+
 
   if (!static_cast<rgw::sal::RadosStore*>(store)->ctl()->bucket->bucket_imports_data(info.bucket, null_yield, dpp())) {
     out << "Sync is disabled for bucket " << info.bucket.name << " or bucket has no sync sources" << std::endl;
@@ -8756,6 +8761,9 @@ next:
     encode_json("total", full_total, formatter.get());
     encode_json("complete", full_complete, formatter.get());
     formatter->close_section();
+    formatter->dump_string("current_time",
+			   to_iso_8601(ceph::real_clock::now(),
+				       iso_8601_format::YMDhms));
     formatter->close_section();
 
     formatter->flush(cout);
@@ -8823,6 +8831,9 @@ next:
       encode_json("marker", sync_marker, formatter.get());
       encode_json("pending_buckets", pending_buckets, formatter.get());
       encode_json("recovering_buckets", recovering_buckets, formatter.get());
+      formatter->dump_string("current_time",
+			     to_iso_8601(ceph::real_clock::now(),
+					 iso_8601_format::YMDhms));
       formatter->close_section();
       formatter->flush(cout);
     } else {
@@ -8851,6 +8862,9 @@ next:
       encode_json("total", full_total, formatter.get());
       encode_json("complete", full_complete, formatter.get());
       formatter->close_section();
+      formatter->dump_string("current_time",
+			     to_iso_8601(ceph::real_clock::now(),
+					 iso_8601_format::YMDhms));
       formatter->close_section();
 
       formatter->flush(cout);
@@ -9648,6 +9662,9 @@ next:
     }
     formatter->open_object_section("entries");
     encode_json("markers", markers, formatter.get());
+    formatter->dump_string("current_time",
+			   to_iso_8601(ceph::real_clock::now(),
+				       iso_8601_format::YMDhms));
     formatter->close_section();
     formatter->flush(cout);
   }
