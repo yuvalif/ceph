@@ -834,7 +834,7 @@ struct complete_op_data {
 
 class RGWIndexCompletionManager {
   RGWRados* const store;
-  const int num_shards;
+  const uint32_t num_shards;
   ceph::containers::tiny_vector<ceph::mutex> locks;
   std::vector<set<complete_op_data*>> completions;
   std::vector<complete_op_data*> retry_completions;
@@ -847,9 +847,9 @@ class RGWIndexCompletionManager {
   std::atomic<int> cur_shard {0};
 
   void process();
-  
+
   void add_completion(complete_op_data *completion);
-  
+
   void stop() {
     if (retry_thread.joinable()) {
       _stop = true;
@@ -857,7 +857,7 @@ class RGWIndexCompletionManager {
       retry_thread.join();
     }
 
-    for (int i = 0; i < num_shards; ++i) {
+    for (uint32_t i = 0; i < num_shards; ++i) {
       std::lock_guard l{locks[i]};
       for (auto c : completions[i]) {
         c->stop();
@@ -865,7 +865,7 @@ class RGWIndexCompletionManager {
     }
     completions.clear();
   }
-  
+
   int next_shard() {
     int result = cur_shard % num_shards;
     cur_shard++;
@@ -959,7 +959,8 @@ void RGWIndexCompletionManager::process()
 			       cls_rgw_guard_bucket_resharding(o, -ERR_BUSY_RESHARDING);
 			       cls_rgw_bucket_complete_op(o, c->op, c->tag, c->ver, c->key, c->dir_meta, &c->remove_objs,
 							  c->log_op, c->bilog_op, &c->zones_trace);
-			       return bs->bucket_obj.operate(&dpp, &o, null_yield);
+			       int ret = bs->bucket_obj.operate(&dpp, &o, null_yield);
+			       return ret;
                              });
       if (r < 0) {
         ldpp_dout(&dpp, 0) << "ERROR: " << __func__ << "(): bucket index completion failed, obj=" << c->obj << " r=" << r << dendl;
@@ -968,9 +969,6 @@ void RGWIndexCompletionManager::process()
       }
 
       add_datalog_entry(&dpp, store->svc.datalog_rados, bucket_info, bs.shard_id);
-      if (r < 0) {
-        ldpp_dout(&dpp, -1) << "ERROR: failed writing data log" << dendl;
-      }
     }
   }
 }
@@ -1057,6 +1055,7 @@ bool RGWIndexCompletionManager::handle_completion(completion_t cb, complete_op_d
   ldout(arg->manager->ctx(), 20) << __func__ << "(): async completion added for obj=" << arg->key << dendl;
   return false;
 }
+
 
 void RGWRados::finalize()
 {
