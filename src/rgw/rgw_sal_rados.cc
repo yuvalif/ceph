@@ -2791,6 +2791,11 @@ const rgw_zone_id& RadosZone::get_id()
   return store->svc()->zone->zone_id();
 }
 
+const std::string_view RadosZone::get_tier_type()
+{
+  return store->svc()->zone->get_zone().tier_type;
+}
+
 const RGWRealm& RadosZone::get_realm()
 {
   return store->svc()->zone->get_realm();
@@ -3235,5 +3240,4 @@ void* newStore(void)
 
   return store;
 }
-
 }
