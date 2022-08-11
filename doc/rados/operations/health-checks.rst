@@ -1189,8 +1189,8 @@ The health warning will be silenced for a particular pool if
 POOL_APP_NOT_ENABLED
 ____________________
 
-A pool exists that contains one or more objects but has not been
-tagged for use by a particular application.
+A pool exists but the pool has not been tagged for use by a particular
+application.
 
 Resolve this warning by labeling the pool for use by an application.  For
 example, if the pool is used by RBD,:
