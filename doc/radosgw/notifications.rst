@@ -473,7 +473,7 @@ pubsub sync module. For example:
        {
            "eventVersion":"2.1",
            "eventSource":"ceph:s3",
-           "awsRegion":"us-east-1",
+           "awsRegion":"zonegroup1",
            "eventTime":"2019-11-22T13:47:35.124724Z",
            "eventName":"ObjectCreated:Put",
            "userIdentity":{
@@ -494,7 +494,7 @@ pubsub sync module. For example:
                    "ownerIdentity":{
                        "principalId":"tester"
                    },
-                   "arn":"arn:aws:s3:us-east-1::mybucket1",
+                   "arn":"arn:aws:s3:zonegroup1::mybucket1",
                    "id":"503a4c37-85eb-47cd-8681-2817e80b4281.5332.38"
                },
                "object":{
