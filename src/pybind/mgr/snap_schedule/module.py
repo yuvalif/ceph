@@ -37,6 +37,17 @@ class Module(MgrModule):
         self._initialized = Event()
         self.client = SnapSchedClient(self)
 
+    def resolve_subvolume_path(self, fs: str, subvol: Optional[str], path: str) -> str:
+        if not subvol:
+            return path
+
+        rc, subvol_path, err = self.remote('volumes', 'subvolume_getpath',
+                                           fs, subvol, None)
+        if rc != 0:
+            # TODO custom exception?
+            raise Exception(f'Could not resolve {path} in {fs}, {subvol}')
+        return subvol_path + path
+
     @property
     def default_fs(self) -> str:
         fs_map = self.get('fs_map')
@@ -69,7 +80,8 @@ class Module(MgrModule):
         if not self.has_fs(use_fs):
             return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
         try:
-            ret_scheds = self.client.get_snap_schedules(use_fs, path)
+            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            ret_scheds = self.client.get_snap_schedules(use_fs, abs_path)
         except CephfsConnectionException as e:
             return e.to_tuple()
         if format == 'json':
@@ -89,7 +101,8 @@ class Module(MgrModule):
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            scheds = self.client.list_snap_schedules(use_fs, path, recursive)
+            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            scheds = self.client.list_snap_schedules(use_fs, abs_path, recursive)
             self.log.debug(f'recursive is {recursive}')
         except CephfsConnectionException as e:
             return e.to_tuple()
