@@ -551,6 +551,13 @@ static int remove_expired_obj(
   }
 
   obj = bucket->get_object(obj_key);
+
+  RGWObjState* obj_state{nullptr};
+  ret = obj->get_obj_state(dpp, &oc.rctx, &obj_state, null_yield);
+  if (ret < 0) {
+    return ret;
+  }
+
   std::unique_ptr<rgw::sal::Object::DeleteOp> del_op
     = obj->get_delete_op(&oc.rctx);
   del_op->params.versioning_status
@@ -586,7 +593,7 @@ static int remove_expired_obj(
   } else {
       // send request to notification manager
     (void) rgw::notify::publish_commit(
-      obj.get(), obj->get_obj_size(), ceph::real_clock::now(),
+      obj.get(), obj_state->size, ceph::real_clock::now(),
       obj->get_attrs()[RGW_ATTR_ETAG].to_str(), version_id, event_type,
       notify_res, dpp);
   }
