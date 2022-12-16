@@ -594,7 +594,7 @@ static int remove_expired_obj(
       // send request to notification manager
     (void) rgw::notify::publish_commit(
       obj.get(), obj_state->size, ceph::real_clock::now(),
-      obj->get_attrs()[RGW_ATTR_ETAG].to_str(), version_id, event_type,
+      obj_state->attrset[RGW_ATTR_ETAG].to_str(), version_id, event_type,
       notify_res, dpp);
   }
 
