@@ -1762,8 +1762,8 @@ def test_ps_s3_opaque_data_on_master():
     conn.delete_bucket(bucket_name)
     http_server.close()
 
-@attr('http_test')
-def test_ps_s3_lifecycle_on_master():
+
+def lifecycle_notifications(versioned):
     """ test that when object is deleted due to lifecycle policy, notification is sent on master """
     hostname = get_ip()
     conn = connection()
@@ -1779,6 +1779,8 @@ def test_ps_s3_lifecycle_on_master():
     # create bucket
     bucket_name = gen_bucket_name()
     bucket = conn.create_bucket(bucket_name)
+    if versioned:
+        bucket.configure_versioning(True)
     topic_name = bucket_name + TOPIC_SUFFIX
 
     # create s3 topic
@@ -1811,7 +1813,8 @@ def test_ps_s3_lifecycle_on_master():
 
     time_diff = time.time() - start_time
     print('average time for creation + http notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
-    
+   
+    keys = list(bucket.list())   
     # create lifecycle policy
     client = boto3.client('s3',
             endpoint_url='http://'+conn.host+':'+str(conn.port),
@@ -1829,29 +1832,28 @@ def test_ps_s3_lifecycle_on_master():
             ]
         }
     )
+    assert_equal(response['ResponseMetadata']['HTTPStatusCode'], 200)
 
     # start lifecycle processing
     admin(['lc', 'process'])
     print('wait for 5sec for the messages...')
     time.sleep(5)
 
-    # check http receiver does not have messages
-    keys = list(bucket.list())
-    print('total number of objects: ' + str(len(keys)))
     event_keys = []
     events = http_server.get_and_reset_events()
     for event in events:
         assert_equal(event['Records'][0]['eventName'], 'ObjectLifecycle:Expiration:Current')
+        assert_equal(event['Records'][0]['s3']['object']['size'], len(content))
+        assert_not_equal(event['Records'][0]['s3']['object']['eTag'], 0)
         event_keys.append(event['Records'][0]['s3']['object']['key'])
     for key in keys:
         key_found = False
         for event_key in event_keys:
-            if event_key == key:
+            if event_key == key.name:
                 key_found = True
                 break
         if not key_found:
             err = 'no lifecycle event found for key: ' + str(key)
-            log.error(events)
             assert False, err
 
     # cleanup
@@ -1860,9 +1862,19 @@ def test_ps_s3_lifecycle_on_master():
     [thr.join() for thr in client_threads]
     topic_conf.del_config()
     s3_notification_conf.del_config(notification=notification_name)
-    # delete the bucket
-    conn.delete_bucket(bucket_name)
+    # TODO: delete the bucket
+    #conn.delete_bucket(bucket_name)
     http_server.close()
+
+
+@attr('http_test')
+def test_ps_s3_lifecycle_on_master():
+    return lifecycle_notifications(False)
+
+
+@attr('http_test')
+def test_ps_s3_lifecycle_on_master_versioned():
+    return lifecycle_notifications(True)
 
 
 def ps_s3_creation_triggers_on_master(external_endpoint_address=None, ca_location=None, verify_ssl='true'):
