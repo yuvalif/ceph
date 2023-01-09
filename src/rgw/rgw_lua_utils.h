@@ -112,20 +112,27 @@ constexpr auto FOUR_RETURNVALS  = 4;
 //
 
 template<typename MetaTable, typename... Upvalues>
-void create_metatable(lua_State* L, bool toplevel, Upvalues... upvalues)
+void create_metatable(lua_State* L, bool toplevel, const std::string& identifier, Upvalues... upvalues)
 {
   constexpr auto upvals_size = sizeof...(upvalues);
   const std::array<void*, upvals_size> upvalue_arr = {upvalues...};
+  const auto table_name = identifier.empty() ? MetaTable::TableName() :
+    identifier + "." + MetaTable::TableName();
   // create table
   lua_newtable(L);
   if (toplevel) {
     // duplicate the table to make sure it remain in the stack
     lua_pushvalue(L, -1);
     // give table a name (in cae of "toplevel")
-    lua_setglobal(L, MetaTable::TableName().c_str());
+    lua_setglobal(L, table_name.c_str());
   }
   // create metatable
-  [[maybe_unused]] const auto rc = luaL_newmetatable(L, MetaTable::Name().c_str());
+  if (luaL_newmetatable(L, table_name.c_str()) == 0) {
+    // metatable already exists, just tie to table
+    lua_setmetatable(L, -2);
+    return;
+  }
+
   lua_pushliteral(L, "__index");
   for (const auto upvalue : upvalue_arr) {
     lua_pushlightuserdata(L, upvalue);
@@ -158,10 +165,18 @@ template<typename MetaTable>
 void create_metatable(lua_State* L, bool toplevel, std::unique_ptr<typename MetaTable::Type>& ptr)
 {
   if (ptr) {
-    create_metatable<MetaTable>(L, toplevel, reinterpret_cast<void*>(ptr.get()));
+    const std::string no_identifier;
+    create_metatable<MetaTable>(L, toplevel, no_identifier, reinterpret_cast<void*>(ptr.get()));
   } else {
     lua_pushnil(L);
   }
+}
+
+template<typename MetaTable, typename... Upvalues>
+void create_metatable(lua_State* L, bool toplevel, Upvalues... upvalues)
+{
+  const std::string no_identifier;
+  create_metatable<MetaTable, Upvalues...>(L, toplevel, no_identifier, upvalues...);
 }
 
 // following struct may be used as a base class for other MetaTable classes

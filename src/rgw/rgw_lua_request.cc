@@ -410,11 +410,12 @@ struct GrantsMetaTable : public EmptyMetaTable {
 
     const char* index = luaL_checkstring(L, 2);
 
-    const auto it = map->find(std::string(index));
+    const std::string str_index(index);
+    const auto it = map->find(str_index);
     if (it == map->end()) {
       lua_pushnil(L);
     } else {
-      create_metatable<GrantMetaTable>(L, false, &(it->second));
+      create_metatable<GrantMetaTable>(L, false, str_index, &(it->second));
     }
     return ONE_RETURNVAL;
   }
@@ -434,16 +435,21 @@ struct GrantsMetaTable : public EmptyMetaTable {
     // based on: http://lua-users.org/wiki/GeneralizedPairsAndIpairs
     auto map = reinterpret_cast<ACLGrantMap*>(lua_touserdata(L, lua_upvalueindex(FIRST_UPVAL)));
     ACLGrantMap::iterator next_it;
+    const auto map_end = map->cend();
     if (lua_isnil(L, -1)) {
       next_it = map->begin();
     } else {
       const char* index = luaL_checkstring(L, 2);
       const auto it = map->find(std::string(index));
-      ceph_assert(it != map->end());
+      ceph_assert(it != map_end);
       next_it = std::next(it);
+      // avoid infinite loop in case of multimap structures
+      while (next_it != map_end && next_it->first == it->first) {
+        next_it = std::next(next_it);
+      }
     }
 
-    if (next_it == map->end()) {
+    if (next_it == map_end) {
       // index of the last element was provided
       lua_pushnil(L);
       lua_pushnil(L);
@@ -451,20 +457,8 @@ struct GrantsMetaTable : public EmptyMetaTable {
       // return nil, nil
     }
 
-    while (next_it->first.empty()) {
-      // this is a multimap and the next element does not have a unique key
-      ++next_it;
-      if (next_it == map->end()) {
-        // index of the last element was provided
-        lua_pushnil(L);
-        lua_pushnil(L);
-        return TWO_RETURNVALS;
-        // return nil, nil
-      }
-    }
-
     pushstring(L, next_it->first);
-    create_metatable<GrantMetaTable>(L, false, &(next_it->second));
+    create_metatable<GrantMetaTable>(L, false, next_it->first, &(next_it->second));
     // return key, value
     
     return TWO_RETURNVALS;
