@@ -13,6 +13,8 @@ $bg-color-dark: #161616;
 $bg-text-color: #161616;
 $text-secondary: #c6c6c6;
 
+$carbon-primary: #0f62fe;
+
 :root {
   --chart-color-blue: #0f62fe;
   --chart-color-green: #198038;
@@ -32,11 +34,11 @@ cd-workbench-layout {
 .btn-primary,
 .btn-accent,
 .btn-accent.dropdown-toggle {
-  background-color: #0f62fe !important;
+  background-color: $carbon-primary !important;
   border-radius: 0 !important;
 
   &:focus {
-    box-shadow:rgba(#0f62fe, 0.5)
+    box-shadow: rgba($carbon-primary, 0.5);
   }
 }
 
@@ -51,6 +53,7 @@ cd-workbench-layout {
 .text-danger {
   color: $support-01 !important;
 }
+
 .text-info {
   color: $support-04 !important;
 }
@@ -76,6 +79,7 @@ cd-workbench-layout {
   color: vv.$white !important;
   font-weight: 400 !important;
 }
+
 .badge-info {
   background-color: $support-04 !important;
   color: vv.$white !important;
@@ -83,7 +87,7 @@ cd-workbench-layout {
 }
 
 .badge-background-primary {
-  background-color: #0f62fe !important;
+  background-color: $carbon-primary !important;
   color: vv.$white !important;
   font-weight: 400 !important;
 }
