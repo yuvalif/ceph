@@ -45,8 +45,6 @@
   },
   "private": true,
   "dependencies": {
-    "@ajsf/bootstrap4": "0.7.0",
-    "@ajsf/core": "0.7.0",
     "@angular/animations": "13.3.11",
     "@angular/common": "13.3.11",
     "@angular/compiler": "13.3.11",
@@ -59,6 +57,8 @@
     "@carbon/colors": "11.11.0",
     "@circlon/angular-tree-component": "10.0.0",
     "@ng-bootstrap/ng-bootstrap": "12.1.2",
+    "@ngx-formly/bootstrap": "6.1.1",
+    "@ngx-formly/core": "6.1.1",
     "@popperjs/core": "2.10.2",
     "@swimlane/ngx-datatable": "18.0.0",
     "@patternfly/patternfly": "4.23.3",
