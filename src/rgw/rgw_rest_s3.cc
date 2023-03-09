@@ -3884,6 +3884,12 @@ int RGWInitMultipart_ObjStore_S3::get_params(optional_yield y)
   if (op_ret < 0)
     return op_ret;
 
+  op_ret = get_encryption_defaults(s);
+  if (op_ret < 0) {
+    ldpp_dout(this, 5) << __func__ << "(): get_encryption_defaults() returned ret=" << op_ret << dendl;
+    return op_ret;
+  }
+
   policy = s3policy;
 
   return 0;
