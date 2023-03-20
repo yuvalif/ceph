@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -2230,3 +2231,33 @@ Traceback (most recent call last):
                 cephadm_module.inventory.all_specs = mock.Mock(
                     return_value=[mock.Mock().hostname, mock.Mock().hostname])
                 cephadm_module._validate_tuned_profile_spec(spec)
+
+    def test_async_timeout_handler(self, cephadm_module):
+        cephadm_module.default_cephadm_command_timeout = 900
+
+        async def _timeout():
+            raise asyncio.TimeoutError
+
+        with pytest.raises(OrchestratorError, match=r'Command timed out \(default 900 second timeout\)'):
+            with cephadm_module.async_timeout_handler():
+                cephadm_module.wait_async(_timeout())
+
+        with pytest.raises(OrchestratorError, match=r'Command timed out on host hostA \(default 900 second timeout\)'):
+            with cephadm_module.async_timeout_handler('hostA'):
+                cephadm_module.wait_async(_timeout())
+
+        with pytest.raises(OrchestratorError, match=r'Command "testing" timed out \(default 900 second timeout\)'):
+            with cephadm_module.async_timeout_handler(cmd='testing'):
+                cephadm_module.wait_async(_timeout())
+
+        with pytest.raises(OrchestratorError, match=r'Command "testing" timed out on host hostB \(default 900 second timeout\)'):
+            with cephadm_module.async_timeout_handler('hostB', 'testing'):
+                cephadm_module.wait_async(_timeout())
+
+        with pytest.raises(OrchestratorError, match=r'Command timed out \(non-default 111 second timeout\)'):
+            with cephadm_module.async_timeout_handler(timeout=111):
+                cephadm_module.wait_async(_timeout())
+
+        with pytest.raises(OrchestratorError, match=r'Command "very slow" timed out on host hostC \(non-default 999 second timeout\)'):
+            with cephadm_module.async_timeout_handler('hostC', 'very slow', 999):
+                cephadm_module.wait_async(_timeout())
