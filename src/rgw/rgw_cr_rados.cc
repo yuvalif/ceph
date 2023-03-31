@@ -743,7 +743,15 @@ int RGWAsyncFetchRemoteObj::_send_request(const DoutPrefixProvider *dpp)
   rgw::sal::RadosObject src_obj(store, key, &bucket);
   rgw::sal::RadosBucket dest_bucket(store, dest_bucket_info);
   rgw::sal::RadosObject dest_obj(store, dest_key.value_or(key), &dest_bucket);
-    
+
+  rgw_obj stat_dest_obj;
+
+  if (!stat_follow_olh) {
+    stat_dest_obj = dest_obj.get_obj();
+  } else {
+    stat_dest_obj = src_obj.get_obj();
+  }
+
   std::string etag;
 
   std::optional<uint64_t> bytes_transferred;
@@ -775,6 +783,8 @@ int RGWAsyncFetchRemoteObj::_send_request(const DoutPrefixProvider *dpp)
                        NULL, /* void *progress_data*); */
                        dpp,
                        filter.get(),
+                       stat_follow_olh,
+                       stat_dest_obj,
                        &zones_trace,
                        &bytes_transferred);
 
