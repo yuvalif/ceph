@@ -459,10 +459,9 @@ void AbstractImageWriteRequest<I>::send_request() {
   if (ret == 1) {
     this->m_image_extents.clear();
     for (auto& object_extent : object_extents) {
-      io::Extents image_extents;
-      io::util::extent_to_file(&image_ctx, object_extent.object_no,
-                               object_extent.offset, object_extent.length,
-                               image_extents);
+      auto [image_extents, _] = io::util::object_to_area_extents(
+	&image_ctx, object_extent.object_no,
+	{{object_extent.offset, object_extent.length}});
       this->m_image_extents.insert(this->m_image_extents.end(),
                                    image_extents.begin(), image_extents.end());
     }
