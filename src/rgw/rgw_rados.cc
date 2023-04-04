@@ -967,8 +967,7 @@ void RGWIndexCompletionManager::process()
         continue;
       }
 
-      r = store->svc.datalog_rados->add_entry(&dpp, bucket_info, bucket_info.layout.logs.back(),
-					      bs.shard_id);
+      add_datalog_entry(&dpp, store->svc.datalog_rados, bucket_info, bs.shard_id);
       if (r < 0) {
         ldpp_dout(&dpp, -1) << "ERROR: failed writing data log" << dendl;
       }
@@ -5241,7 +5240,8 @@ int RGWRados::Object::Delete::delete_obj(optional_yield y, const DoutPrefixProvi
     BucketShard *bs = nullptr;
     int r = target->get_bucket_shard(&bs, dpp);
     if (r < 0) {
-      ldpp_dout(dpp, 5) << "failed to get BucketShard object: r=" << r << dendl;
+      ldpp_dout(dpp, 0) << "ERROR: failed to get BucketShard object. obj=" <<
+	obj << ". r=" << r << dendl;
       return r;
     }
 
