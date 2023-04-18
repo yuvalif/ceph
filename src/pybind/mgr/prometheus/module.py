@@ -1639,8 +1639,13 @@ class Module(MgrModule):
         self.get_pool_repaired_objects()
         self.get_num_objects()
         self.get_all_daemon_health_metrics()
+        self.get_perf_counters()
 
-        for daemon, counters in self.get_all_perf_counters().items():
+    def get_perf_counters(self) -> None:
+        """
+        Get the perf counters for all daemons
+        """
+        for daemon, counters in self.get_unlabeled_perf_counters().items():
             for path, counter_info in counters.items():
                 # Skip histograms, they are represented by long running avgs
                 stattype = self._stattype_to_str(counter_info['type'])
