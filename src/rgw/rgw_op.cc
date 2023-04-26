@@ -2208,7 +2208,7 @@ void RGWGetObj::execute(optional_yield y)
   if (attr_iter != attrs.end() && get_type() == RGW_OP_GET_OBJ && get_data) {
     RGWObjManifest m;
     decode(m, attr_iter->second);
-    if (m.get_tier_type() == "cloud-s3") {
+    if (m.get_tier_type() == "cloud-s3" && !sync_cloudtiered) {
       /* XXX: Instead send presigned redirect or read-through */
       op_ret = -ERR_INVALID_OBJECT_STATE;
       ldpp_dout(this, 0) << "ERROR: Cannot get cloud tiered object. Failing with "
