@@ -152,6 +152,8 @@
   If that is the case, in OSD logs the "You can be hit by THE DUPS BUG" warning
   will be visible.
   Relevant tracker: https://tracker.ceph.com/issues/53729
+* CEPHFS: After recovering a Ceph File System post following the disaster recovery
+  procedure, the recovered files under `lost+found` directory can now be deleted.
 
 >=17.2.1
 
