@@ -3615,7 +3615,9 @@ BlueStore::Extent *BlueStore::ExtentMap::set_lextent(
 
   Extent *le = new Extent(logical_offset, blob_offset, length, b);
   extent_map.insert(*le);
-  maybe_reshard(logical_offset, logical_offset + length);
+  if (spans_shard(logical_offset, length)) {
+    request_reshard(logical_offset, logical_offset + length);
+  }
   return le;
 }
 
