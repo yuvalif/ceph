@@ -1779,7 +1779,7 @@ private:
 #endif
     
     std::set<SharedBlobRef> shared_blobs;  ///< these need to be updated/written
-    std::set<BlobRef> blobs_written; ///< update these on io completion
+    std::set<SharedBlobRef> shared_blobs_written; ///< update these on io completion
 
     KeyValueDB::Transaction t; ///< then we will commit this
     std::list<Context*> oncommits;  ///< more commit completions
@@ -2815,7 +2815,7 @@ private:
     unsigned flags) {
     b->shared_blob->bc.write(b->shared_blob->get_cache(), txc->seq, offset, bl,
 			     flags);
-    txc->blobs_written.insert(b);
+    txc->shared_blobs_written.insert(b->shared_blob);
   }
 
   int _collection_list(
