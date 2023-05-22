@@ -62,7 +62,7 @@ class BlueStoreRepairer;
 class SimpleBitmap;
 //#define DEBUG_CACHE
 //#define DEBUG_DEFERRED
-#define WITH_ESB
+#undef WITH_ESB
 
 
 // constants for Buffer::optimize()
