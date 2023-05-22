@@ -1332,9 +1332,6 @@ public:
   }
 
   void SetUp() override {
-#ifndef WITH_ESB
-    GTEST_SKIP() << "ESB(elastic shared blob) is off";
-#endif
   }
   void TearDown() override {
   }
@@ -1665,9 +1662,6 @@ TEST_F(ExtentMapFixture, petri)
 
 TEST(ExtentMap, dup_extent_map)
 {
-#ifndef WITH_ESB
-  GTEST_SKIP() << "ESB(elastic shared blob) is off";
-#endif
   BlueStore store(g_ceph_context, "", 4096);
   BlueStore::OnodeCacheShard *oc = BlueStore::OnodeCacheShard::create(
     g_ceph_context, "lru", NULL);
