@@ -10,8 +10,13 @@ from typing import TYPE_CHECKING, Optional, List, cast, Dict, Any, Union, Tuple,
 
 from ceph.deployment import inventory
 from ceph.deployment.drive_group import DriveGroupSpec
-from ceph.deployment.service_spec import ServiceSpec, CustomContainerSpec, PlacementSpec, \
-    RGWSpec, IngressSpec
+from ceph.deployment.service_spec import (
+    CustomContainerSpec,
+    PlacementSpec,
+    RGWSpec,
+    ServiceSpec,
+    IngressSpec
+)
 from ceph.utils import datetime_now
 
 import orchestrator
