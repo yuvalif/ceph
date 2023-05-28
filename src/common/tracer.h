@@ -46,40 +46,78 @@ class Tracer {
 
 };
 
-inline void encode(const jspan_context& span_ctx, bufferlist& bl, uint64_t f = 0) {
-  ENCODE_START(1, 1, bl);
+// encoding the span
+// shoudl be called only if valid, and between ENCODE_START, ENCODE_FINISH pair
+inline void encode_nohead(const jspan_context& span_ctx, bufferlist& bl, uint64_t f = 0) {
   using namespace opentelemetry;
   using namespace trace;
+  ceph::encode_nohead(std::string_view(reinterpret_cast<const char*>(span_ctx.trace_id().Id().data()), TraceId::kSize), bl);
+  ceph::encode_nohead(std::string_view(reinterpret_cast<const char*>(span_ctx.span_id().Id().data()), SpanId::kSize), bl);
+  encode(span_ctx.trace_flags().flags(), bl);
+}
+
+// decoding the span
+// shoudl be called only if valid, and between DECODE_START, DECODE_FINISH pair
+inline void decode_nohead(jspan_context& span_ctx, bufferlist::const_iterator& bl) {
+  using namespace opentelemetry;
+  using namespace trace;
+  std::array<uint8_t, TraceId::kSize> trace_id;
+  std::array<uint8_t, SpanId::kSize> span_id;
+  uint8_t flags;
+  decode(trace_id, bl);
+  decode(span_id, bl);
+  decode(flags, bl);
+  span_ctx = SpanContext(
+    TraceId(nostd::span<uint8_t, TraceId::kSize>(trace_id)),
+    SpanId(nostd::span<uint8_t, SpanId::kSize>(span_id)),
+    TraceFlags(flags),
+    true);
+}
+
+// encoding the span
+inline void encode(const jspan_context& span_ctx, bufferlist& bl, uint64_t f = 0) {
+  ENCODE_START(1, 1, bl);
   auto is_valid = span_ctx.IsValid();
   encode(is_valid, bl);
   if (is_valid) {
-    encode_nohead(std::string_view(reinterpret_cast<const char*>(span_ctx.trace_id().Id().data()), TraceId::kSize), bl);
-    encode_nohead(std::string_view(reinterpret_cast<const char*>(span_ctx.span_id().Id().data()), SpanId::kSize), bl);
-    encode(span_ctx.trace_flags().flags(), bl);
+    encode_nohead(span_ctx, bl, f);
   }
   ENCODE_FINISH(bl);
 }
 
+// decoding the span
 inline void decode(jspan_context& span_ctx, bufferlist::const_iterator& bl) {
-  using namespace opentelemetry;
-  using namespace trace;
   DECODE_START(1, bl);
   bool is_valid;
   decode(is_valid, bl);
   if (is_valid) {
-    std::array<uint8_t, TraceId::kSize> trace_id;
-    std::array<uint8_t, SpanId::kSize> span_id;
-    uint8_t flags;
-    decode(trace_id, bl);
-    decode(span_id, bl);
-    decode(flags, bl);
-    span_ctx = SpanContext(
-      TraceId(nostd::span<uint8_t, TraceId::kSize>(trace_id)),
-      SpanId(nostd::span<uint8_t, SpanId::kSize>(span_id)),
-      TraceFlags(flags),
-      true);
+    decode_nohead(span_ctx, bl);
   }
   DECODE_FINISH(bl);
+}
+
+// encoding the span
+// shoudl be called between ENCODE_START, ENCODE_FINISH pair
+inline void nested_encode(const jspan_context& span_ctx, bufferlist& bl, uint64_t f = 0) {
+  auto is_valid = span_ctx.IsValid();
+  ceph::encode(is_valid, bl);
+  if (is_valid) {
+    ENCODE_START(1, 1, bl);
+    encode_nohead(span_ctx, bl, f);
+    ENCODE_FINISH(bl);
+  }
+}
+
+// decoding the span
+// shoudl be called between DECODE_START, DECODE_FINISH pair
+inline void nested_decode(jspan_context& span_ctx, bufferlist::const_iterator& bl) {
+  bool is_valid;
+  ceph::decode(is_valid, bl);
+  if (is_valid) {
+    DECODE_START(1, bl);
+    decode_nohead(span_ctx, bl);
+    DECODE_FINISH(bl);
+  }
 }
 
 } // namespace tracing
@@ -146,6 +184,8 @@ struct Tracer {
 };
   inline void encode(const jspan_context& span, bufferlist& bl, uint64_t f=0) {}
   inline void decode(jspan_context& span_ctx, ceph::buffer::list::const_iterator& bl) {}
+  inline void nested_encode(const jspan_context& span, bufferlist& bl, uint64_t f=0) {}
+  inline void nested_decode(jspan_context& span_ctx, ceph::buffer::list::const_iterator& bl) {}
 }
 
 #endif // !HAVE_JAEGER
