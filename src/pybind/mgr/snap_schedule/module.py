@@ -37,16 +37,43 @@ class Module(MgrModule):
         self._initialized = Event()
         self.client = SnapSchedClient(self)
 
-    def resolve_subvolume_path(self, fs: str, subvol: Optional[str], path: str) -> str:
-        if not subvol:
-            return path
+    def subvolume_exist(self, fs: str, subvol: str) -> bool:
+        rc, subvolumes, err = self.remote('volumes', 'subvolume_ls', fs, None)
+        if rc == 0:
+            for svj in json.loads(subvolumes):
+                if subvol == svj['name']:
+                    return True
 
-        rc, subvol_path, err = self.remote('volumes', 'subvolume_getpath',
-                                           fs, subvol, None)
-        if rc != 0:
-            # TODO custom exception?
-            raise Exception(f'Could not resolve {path} in {fs}, {subvol}')
-        return subvol_path + path
+        return False
+
+    def subvolume_flavor(self, fs: str, subvol: str) -> str:
+        rc, subvol_info, err = self.remote('volumes', 'subvolume_info', fs, subvol, None)
+        svi_json = json.loads(subvol_info)
+        return svi_json.get('flavor', 'bad_flavor')  # "1" or "2" etc.
+
+    def resolve_subvolume_path(self, fs: str, subvol: Optional[str], path: str) -> Tuple[int, str]:
+        if not subvol:
+            return 0, path, ''
+
+        rc = -1
+        subvol_path = ''
+        if self.subvolume_exist(fs, subvol):
+            rc, subvol_path, err = self.remote('volumes', 'subvolume_getpath', fs, subvol, None)
+            if rc != 0:
+                return rc, '', f'Could not resolve subvol:{subvol} path in fs:{fs}'
+            else:
+                subvol_flavor = self.subvolume_flavor(fs, subvol)
+                if subvol_flavor == "1":  # v1
+                    return 0, subvol_path, f'Ignoring user specified path:{path} for subvol'
+                if subvol_flavor == "2":  # v2
+                    err = '';
+                    if path != "/..":
+                        err = f'Ignoring user specified path:{path} for subvol'
+                    return 0, subvol_path + "/..", err
+
+                return -errno.EINVAL, '', f'Unhandled subvol flavor:{subvol_flavor}'
+        else:
+            return -errno.EINVAL, '', f'No such subvol:{subvol}'
 
     @property
     def default_fs(self) -> str:
@@ -80,14 +107,18 @@ class Module(MgrModule):
         use_fs = fs if fs else self.default_fs
         if not self.has_fs(use_fs):
             return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
+        errstr = 'Success'
         try:
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, '', errstr
             ret_scheds = self.client.get_snap_schedules(use_fs, abs_path)
         except CephfsConnectionException as e:
             return e.to_tuple()
         if format == 'json':
             json_report = ','.join([ret_sched.report_json() for ret_sched in ret_scheds])
             return 0, f'[{json_report}]', ''
+        self.log.info(errstr)
         return 0, '\n===\n'.join([ret_sched.report() for ret_sched in ret_scheds]), ''
 
     @CLIReadCommand('fs snap-schedule list')
@@ -99,11 +130,14 @@ class Module(MgrModule):
         '''
         Get current snapshot schedule for <path>
         '''
+        errstr = 'Success'
         try:
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, errstr, ''
             scheds = self.client.list_snap_schedules(use_fs, abs_path, recursive)
             self.log.debug(f'recursive is {recursive}')
         except CephfsConnectionException as e:
@@ -112,13 +146,14 @@ class Module(MgrModule):
             if format == 'json':
                 output: Dict[str, str] = {}
                 return 0, json.dumps(output), ''
-            return -errno.ENOENT, '', f'SnapSchedule for {path} not found'
+            return -errno.ENOENT, '', f'SnapSchedule for {abs_path} not found'
         if format == 'json':
             # json_list = ','.join([sched.json_list() for sched in scheds])
             schedule_list = [sched.schedule for sched in scheds]
             retention_list = [sched.retention for sched in scheds]
-            out = {'path': path, 'schedule': schedule_list, 'retention': retention_list}
+            out = {'path': abs_path, 'schedule': schedule_list, 'retention': retention_list}
             return 0, json.dumps(out), ''
+        self.log.info(errstr)
         return 0, '\n'.join([str(sched) for sched in scheds]), ''
 
     @CLIWriteCommand('fs snap-schedule add')
@@ -131,18 +166,21 @@ class Module(MgrModule):
         '''
         Set a snapshot schedule for <path>
         '''
+        errstr = 'Success'
         try:
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, '', errstr
             self.client.store_snap_schedule(use_fs,
                                             abs_path,
                                             (abs_path, snap_schedule,
-                                             use_fs, path, start, subvol))
-            suc_msg = f'Schedule set for path {path}'
+                                             use_fs, abs_path, start, subvol))
+            suc_msg = f'Schedule set for path {abs_path}'
         except sqlite3.IntegrityError:
-            existing_scheds = self.client.get_snap_schedules(use_fs, path)
+            existing_scheds = self.client.get_snap_schedules(use_fs, abs_path)
             report = [s.report() for s in existing_scheds]
             error_msg = f'Found existing schedule {report}'
             self.log.error(error_msg)
@@ -151,6 +189,7 @@ class Module(MgrModule):
             return -errno.ENOENT, '', str(e)
         except CephfsConnectionException as e:
             return e.to_tuple()
+        self.log.info(errstr)
         return 0, suc_msg, ''
 
     @CLIWriteCommand('fs snap-schedule remove')
@@ -163,17 +202,21 @@ class Module(MgrModule):
         '''
         Remove a snapshot schedule for <path>
         '''
+        errstr = 'Success'
         try:
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, '', errstr
             self.client.rm_snap_schedule(use_fs, abs_path, repeat, start)
         except CephfsConnectionException as e:
             return e.to_tuple()
         except ValueError as e:
             return -errno.ENOENT, '', str(e)
-        return 0, 'Schedule removed for path {}'.format(path), ''
+        self.log.info(errstr)
+        return 0, 'Schedule removed for path {}'.format(abs_path), ''
 
     @CLIWriteCommand('fs snap-schedule retention add')
     def snap_schedule_retention_add(self,
@@ -185,11 +228,14 @@ class Module(MgrModule):
         '''
         Set a retention specification for <path>
         '''
+        errstr = 'Success'
         try:
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, '', errstr
             self.client.add_retention_spec(use_fs, abs_path,
                                           retention_spec_or_period,
                                           retention_count)
@@ -197,7 +243,8 @@ class Module(MgrModule):
             return e.to_tuple()
         except ValueError as e:
             return -errno.ENOENT, '', str(e)
-        return 0, 'Retention added to path {}'.format(path), ''
+        self.log.info(errstr)
+        return 0, 'Retention added to path {}'.format(abs_path), ''
 
     @CLIWriteCommand('fs snap-schedule retention remove')
     def snap_schedule_retention_rm(self,
@@ -209,11 +256,14 @@ class Module(MgrModule):
         '''
         Remove a retention specification for <path>
         '''
+        errstr = 'Success'
         try:
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, '', errstr
             self.client.rm_retention_spec(use_fs, abs_path,
                                           retention_spec_or_period,
                                           retention_count)
@@ -221,7 +271,8 @@ class Module(MgrModule):
             return e.to_tuple()
         except ValueError as e:
             return -errno.ENOENT, '', str(e)
-        return 0, 'Retention removed from path {}'.format(path), ''
+        self.log.info(errstr)
+        return 0, 'Retention removed from path {}'.format(abs_path), ''
 
     @CLIWriteCommand('fs snap-schedule activate')
     def snap_schedule_activate(self,
@@ -233,17 +284,21 @@ class Module(MgrModule):
         '''
         Activate a snapshot schedule for <path>
         '''
+        errstr = 'Success'
         try:
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, '', errstr
             self.client.activate_snap_schedule(use_fs, abs_path, repeat, start)
         except CephfsConnectionException as e:
             return e.to_tuple()
         except ValueError as e:
             return -errno.ENOENT, '', str(e)
-        return 0, 'Schedule activated for path {}'.format(path), ''
+        self.log.info(errstr)
+        return 0, 'Schedule activated for path {}'.format(abs_path), ''
 
     @CLIWriteCommand('fs snap-schedule deactivate')
     def snap_schedule_deactivate(self,
@@ -255,14 +310,18 @@ class Module(MgrModule):
         '''
         Deactivate a snapshot schedule for <path>
         '''
+        errstr = 'Success'
         try:
             use_fs = fs if fs else self.default_fs
             if not self.has_fs(use_fs):
                 return -errno.EINVAL, '', f"no such filesystem: {use_fs}"
-            abs_path = self.resolve_subvolume_path(use_fs, subvol, path)
+            rc, abs_path, errstr = self.resolve_subvolume_path(use_fs, subvol, path)
+            if rc != 0:
+                return rc, '', errstr
             self.client.deactivate_snap_schedule(use_fs, abs_path, repeat, start)
         except CephfsConnectionException as e:
             return e.to_tuple()
         except ValueError as e:
             return -errno.ENOENT, '', str(e)
-        return 0, 'Schedule deactivated for path {}'.format(path), ''
+        self.log.info(errstr)
+        return 0, 'Schedule deactivated for path {}'.format(abs_path), ''
