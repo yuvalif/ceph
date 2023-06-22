@@ -12,6 +12,9 @@
                 (fetchData)="getHosts($event)"
                 selectionType="single"
                 [hasDetails]="hasTableDetails"
+                [serverSide]="true"
+                [count]="count"
+                [maxLimit]="25"
                 (setExpandedRow)="setExpandedRow($event)"
                 (updateSelection)="updateSelection($event)"
                 [toolHeader]="!hideToolHeader">
