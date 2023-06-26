@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -159,10 +160,15 @@ void DaemonMetricCollector::dump_asok_metrics() {
             labels.insert(multisite_labels_and_name.first.begin(), multisite_labels_and_name.first.end());
             counter_name = multisite_labels_and_name.second;
           }
+<<<<<<< HEAD
           if (counters_values.find(counter_name_init) != counters_values.end()) {
             auto perf_values = counters_values.at(counter_name_init);
             dump_asok_metric(counter_group, perf_values, counter_name, labels);
           }
+=======
+          auto perf_values = counters_values.at(counter_name_init);
+          dump_asok_metric(counter_group, perf_values, counter_name, labels);
+>>>>>>> 2b223bd5d77 (mgr/dashboard: empty grafana panels for performance of daemons)
         }
       }
     }
@@ -290,6 +296,7 @@ std::string DaemonMetricCollector::asok_request(AdminSocketClient &asok,
 
 labels_t DaemonMetricCollector::get_extra_labels(std::string daemon_name) {
   labels_t labels;
+  new_metric_name = metric_name;
   const std::string ceph_daemon_prefix = "ceph-";
   const std::string ceph_client_prefix = "client.";
   if (daemon_name.rfind(ceph_daemon_prefix, 0) == 0) {

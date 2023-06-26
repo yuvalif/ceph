@@ -1,9 +1,12 @@
 #include "gtest/gtest.h"
 #include "exporter/util.h"
+#include "exporter/DaemonMetricCollector.h"
 
 #include <string>
 #include <vector>
 #include <utility>
+
+typedef std::map<std::string, std::string> labels_t;
 
 // 17.2.6's memento mori:
 // This data was gathered from the python implementation of the promethize method
