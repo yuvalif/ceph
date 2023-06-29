@@ -50,3 +50,5 @@ sensible.
     NFS module <nfs>
     Progress Module <progress>
     CLI API Commands module <cli_api>
+    IBM Ceph Call Home module <callhome>
+
