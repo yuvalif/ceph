@@ -30,6 +30,8 @@ export class DashboardAreaChartComponent implements OnChanges, AfterViewInit {
   label: string;
   @Input()
   label2?: string;
+  @Input()
+  decimals?: number = 1;
 
   currentDataUnits: string;
   currentData: number;
@@ -214,7 +216,8 @@ export class DashboardAreaChartComponent implements OnChanges, AfterViewInit {
         dataWithUnits = this.numberFormatter.formatSecondsFromTo(
           data,
           this.dataUnits,
-          this.chartDataUnits
+          this.chartDataUnits,
+          this.decimals
         );
       } else {
         dataWithUnits = this.numberFormatter.formatUnitlessFromTo(
@@ -234,7 +237,7 @@ export class DashboardAreaChartComponent implements OnChanges, AfterViewInit {
     } else if (this.dataUnits === 'B/s') {
       dataWithUnits = this.dimlessBinaryPerSecond.transform(data);
     } else if (this.dataUnits === 'ms') {
-      dataWithUnits = this.formatter.format_number(data, 1000, ['ms', 's']);
+      dataWithUnits = this.formatter.format_number(data, 1000, ['ms', 's'], this.decimals);
     } else {
       dataWithUnits = this.dimlessPipe.transform(data);
     }
