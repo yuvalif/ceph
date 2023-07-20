@@ -36,6 +36,8 @@ export class FormButtonPanelComponent {
   cancelText: string = this.actionLabels.CANCEL;
   @Input()
   disabled = false;
+  @Input()
+  title = '';
 
   constructor(
     private location: Location,

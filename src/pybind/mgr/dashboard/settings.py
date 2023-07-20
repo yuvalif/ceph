@@ -119,6 +119,9 @@ class Options(object):
                                                   'gateway', 'logs', 'crush', 'maps']),
                                         [str])
 
+    CALL_HOME_REMIND_LATER_ON = Setting('', [str])
+    STORAGE_INSIGHTS_REMIND_LATER_ON = Setting('', [str])
+
     @staticmethod
     def has_default_value(name):
         return getattr(Settings, name, None) is None or \
