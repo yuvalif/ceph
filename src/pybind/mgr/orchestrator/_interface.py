@@ -829,10 +829,6 @@ def daemon_type_to_service(dtype: str) -> str:
         'container': 'container',
         'agent': 'agent',
         'snmp-gateway': 'snmp-gateway',
-        'elasticsearch': 'elasticsearch',
-        'jaeger-agent': 'jaeger-agent',
-        'jaeger-collector': 'jaeger-collector',
-        'jaeger-query': 'jaeger-query'
     }
     return mapping[dtype]
 
@@ -861,11 +857,6 @@ def service_to_daemon_types(stype: str) -> List[str]:
         'container': ['container'],
         'agent': ['agent'],
         'snmp-gateway': ['snmp-gateway'],
-        'elasticsearch': ['elasticsearch'],
-        'jaeger-agent': ['jaeger-agent'],
-        'jaeger-collector': ['jaeger-collector'],
-        'jaeger-query': ['jaeger-query'],
-        'jaeger-tracing': ['elasticsearch', 'jaeger-query', 'jaeger-collector', 'jaeger-agent']
     }
     return mapping[stype]
 
