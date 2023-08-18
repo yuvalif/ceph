@@ -131,7 +131,7 @@ export class CephfsListComponent extends ListWithDetails implements OnInit {
   removeVolumeModal() {
     const volName = this.selection.first().mdsmap['fs_name'];
     this.modalService.show(CriticalConfirmationModalComponent, {
-      itemDescription: 'Volume',
+      itemDescription: 'File System',
       itemNames: [volName],
       actionDescription: 'remove',
       submitActionObservable: () =>
@@ -145,7 +145,7 @@ export class CephfsListComponent extends ListWithDetails implements OnInit {
   getDisableDesc(): boolean | string {
     if (this.selection?.hasSelection) {
       if (!this.monAllowPoolDelete) {
-        return $localize`Volume deletion is disabled by the mon_allow_pool_delete configuration setting.`;
+        return $localize`File System deletion is disabled by the mon_allow_pool_delete configuration setting.`;
       }
 
       return false;
@@ -158,7 +158,7 @@ export class CephfsListComponent extends ListWithDetails implements OnInit {
     const selectedVolume = this.selection.first().mdsmap['fs_name'];
 
     this.modalService.show(FormModalComponent, {
-      titleText: $localize`Edit Volume: ${selectedVolume}`,
+      titleText: $localize`Edit File System: ${selectedVolume}`,
       fields: [
         {
           type: 'text',
@@ -168,12 +168,12 @@ export class CephfsListComponent extends ListWithDetails implements OnInit {
           required: true
         }
       ],
-      submitButtonText: $localize`Edit Volume`,
+      submitButtonText: $localize`Edit File System`,
       onSubmit: (values: any) => {
         this.cephfsService.rename(selectedVolume, values.name).subscribe(() => {
           this.notificationService.show(
             NotificationType.success,
-            $localize`Updated Volume '${selectedVolume}'`
+            $localize`Updated File System '${selectedVolume}'`
           );
         });
       }
