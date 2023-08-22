@@ -71,6 +71,10 @@ export class DashboardAreaChartComponent implements OnChanges, AfterViewInit {
       display: false
     },
     tooltips: {
+      custom: function (tooltipModel: { x: number; y: number }) {
+        tooltipModel.x = 10;
+        tooltipModel.y = 0;
+      }.bind(this),
       intersect: false,
       displayColors: true,
       backgroundColor: this.cssHelper.propertyValue('chart-color-tooltip-background'),
@@ -118,7 +122,7 @@ export class DashboardAreaChartComponent implements OnChanges, AfterViewInit {
       borderArea: true,
       chartAreaBorder: {
         borderColor: this.cssHelper.propertyValue('chart-color-slight-dark-gray'),
-        borderWidth: 2
+        borderWidth: 1
       }
     }
   };
