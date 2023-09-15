@@ -15,7 +15,7 @@ import { CdForm } from '../../forms/cd-form';
   templateUrl: './storage-insights-modal.component.html',
   styleUrls: ['./storage-insights-modal.component.scss']
 })
-export class StorageInsightsModalComponent extends CdForm implements OnInit{
+export class StorageInsightsModalComponent extends CdForm implements OnInit {
   modalForm: CdFormGroup;
   tenantForm: CdFormGroup;
 
@@ -52,31 +52,38 @@ export class StorageInsightsModalComponent extends CdForm implements OnInit{
     });
     this.storageInsightsService.getStorageInsightsStatus().subscribe((status: boolean) => {
       this.isConfigured = status;
-      
+
       status ? this.populateForm() : this.loadingReady();
     });
   }
 
   createForm() {
     this.modalForm = new CdFormGroup({
-      ibmId: new FormControl({value: null, disabled: this.callHomeEnabled}, [Validators.required]),
-      companyName: new FormControl({value: null, disabled: this.callHomeEnabled}, [Validators.required]),
-      firstName: new FormControl({value: null, disabled: this.callHomeEnabled}, [Validators.required]),
-      lastName: new FormControl({value: null, disabled: this.callHomeEnabled}, [Validators.required]),
-      email: new FormControl({value: null, disabled: this.callHomeEnabled}, [Validators.required])
+      ibmId: new FormControl({ value: null, disabled: this.callHomeEnabled }, [
+        Validators.required
+      ]),
+      companyName: new FormControl({ value: null, disabled: this.callHomeEnabled }, [
+        Validators.required
+      ]),
+      firstName: new FormControl({ value: null, disabled: this.callHomeEnabled }, [
+        Validators.required
+      ]),
+      lastName: new FormControl({ value: null, disabled: this.callHomeEnabled }, [
+        Validators.required
+      ]),
+      email: new FormControl({ value: null, disabled: this.callHomeEnabled }, [Validators.required])
     });
   }
 
   populateForm() {
     this.action = $localize`Update`;
     this.callHomeService.info().subscribe((data: any) => {
-      console.log(data.IBM_storage_insights)
       this.modalForm.get('ibmId').setValue(data.IBM_storage_insights.owner_ibm_id);
       this.modalForm.get('companyName').setValue(data.IBM_storage_insights.owner_company_name);
       this.modalForm.get('firstName').setValue(data.IBM_storage_insights.owner_first_name);
       this.modalForm.get('lastName').setValue(data.IBM_storage_insights.owner_last_name);
       this.modalForm.get('email').setValue(data.IBM_storage_insights.owner_email);
-      const tenantId = data.IBM_storage_insights.owner_IBM_tenant_id
+      const tenantId = data.IBM_storage_insights.owner_IBM_tenant_id;
       this.fetchTenants(this.modalForm.value, tenantId);
     });
     this.loadingReady();
@@ -90,36 +97,39 @@ export class StorageInsightsModalComponent extends CdForm implements OnInit{
   }
 
   fetchTenants(formFields: any, tenantId = ''): void {
-    this.callHomeService.list(formFields).subscribe((data: any) => {
-      this.tenantsList = data['si-instances'];
-      if (tenantId) {
-        this.selectedTenant = this.tenantsList.filter((tenant: any) => tenant['external_url'].includes(tenantId))
-      } else {
-        this.selectedTenant = this.tenantsList[0];
+    this.callHomeService.list(formFields).subscribe(
+      (data: any) => {
+        this.tenantsList = data['si-instances'];
+        if (tenantId) {
+          this.selectedTenant = this.tenantsList.filter((tenant: any) =>
+            tenant['external_url'].includes(tenantId)
+          );
+        } else {
+          this.selectedTenant = this.tenantsList[0];
+        }
+        this.onSelectChange();
+      },
+      (error) => {
+        this.modalForm.setErrors({ cdSubmitButton: true });
+        this.notificationService.show(
+          NotificationType.error,
+          $localize`Failed to fetch tenants`,
+          error.error.detail
+        );
       }
-      this.onSelectChange();
-    },
-    (error) => {
-      this.modalForm.setErrors({ cdSubmitButton: true });
-      this.notificationService.show(
-        NotificationType.error,
-        $localize`Failed to fetch tenants`,
-        error.error.detail
-      )
-    });
+    );
   }
 
   optIn(formFields: any) {
-    const notificationMessage = this.isConfigured ? $localize`Updated IBM Storage Insights Configuration` : $localize`Activated IBM Storage Insights`;
+    const notificationMessage = this.isConfigured
+      ? $localize`Updated IBM Storage Insights Configuration`
+      : $localize`Activated IBM Storage Insights`;
     formFields['tenantId'] = this.tenantId;
     this.callHomeService.set(formFields).subscribe({
       error: () => this.modalForm.setErrors({ cdSubmitButton: true }),
       complete: () => {
         this.storageInsightsNotificationService.setVisibility(false);
-        this.notificationService.show(
-          NotificationType.success,
-          notificationMessage
-        );
+        this.notificationService.show(NotificationType.success, notificationMessage);
         this.storageInsightsNotificationService.setVisibility(false);
         this.activeModal.close();
       }
