@@ -146,11 +146,13 @@ void DaemonMetricCollector::dump_asok_metrics() {
           std::string counter_name = perf_group + "_" + counter_name_init;
           promethize(counter_name);
 
-          if (counters_labels.empty()) {
-            auto labels_and_name = get_labels_and_metric_name(daemon_name, counter_name);
-            labels = labels_and_name.first;
-            counter_name = labels_and_name.second;
+          auto extra_labels = get_extra_labels(daemon_name);
+          if (extra_labels.empty()) {
+            dout(1) << "Unable to parse instance_id from daemon_name: " << daemon_name << dendl;
+            continue;
           }
+          labels.insert(extra_labels.begin(), extra_labels.end());
+
           // For now this is only required for rgw multi-site metrics
           auto multisite_labels_and_name = add_fixed_name_metrics(counter_name);
           if (!multisite_labels_and_name.first.empty()) {
@@ -286,12 +288,16 @@ std::string DaemonMetricCollector::asok_request(AdminSocketClient &asok,
   return response;
 }
 
-std::pair<labels_t, std::string>
-DaemonMetricCollector::get_labels_and_metric_name(std::string daemon_name,
-                                                  std::string metric_name) {
-  std::string new_metric_name;
+labels_t DaemonMetricCollector::get_extra_labels(std::string daemon_name) {
   labels_t labels;
-  new_metric_name = metric_name;
+  const std::string ceph_daemon_prefix = "ceph-";
+  const std::string ceph_client_prefix = "client.";
+  if (daemon_name.rfind(ceph_daemon_prefix, 0) == 0) {
+    daemon_name = daemon_name.substr(ceph_daemon_prefix.size());
+  }
+  if (daemon_name.rfind(ceph_client_prefix, 0) == 0) {
+    daemon_name = daemon_name.substr(ceph_client_prefix.size());
+  }
   // In vstart cluster socket files for rgw are stored as radosgw.<instance_id>.asok
   if (daemon_name.find("radosgw") != std::string::npos) {
     std::size_t pos = daemon_name.find_last_of('.');
@@ -299,23 +305,23 @@ DaemonMetricCollector::get_labels_and_metric_name(std::string daemon_name,
     labels["instance_id"] = quote(tmp);
   }
   else if (daemon_name.find("rgw") != std::string::npos) {
-    std::string tmp = daemon_name.substr(16, std::string::npos);
-    std::string::size_type pos = tmp.find('.');
-    labels["instance_id"] = quote("rgw." + tmp.substr(0, pos));
-  }
-  else if (daemon_name.find("rbd-mirror") != std::string::npos) {
-    std::regex re(
-        "^rbd_mirror_image_([^/]+)/(?:(?:([^/]+)/"
-        ")?)(.*)\\.(replay(?:_bytes|_latency)?)$");
-    std::smatch match;
-    if (std::regex_search(daemon_name, match, re) == true) {
-      new_metric_name = "ceph_rbd_mirror_image_" + match.str(4);
-      labels["pool"] = quote(match.str(1));
-      labels["namespace"] = quote(match.str(2));
-      labels["image"] = quote(match.str(3));
+    // fetch intance_id for e.g. "hrgsea" from daemon_name=rgw.foo.ceph-node-00.hrgsea.2.94739968030880
+    std::vector<std::string> elems;
+    std::stringstream ss;
+    ss.str(daemon_name);
+    std::string item;
+    while (std::getline(ss, item, '.')) {
+        elems.push_back(item);
     }
+    if (elems.size() >= 4) {
+      labels["instance_id"] = quote(elems[3]);
+    } else {
+      return labels_t();
+    }
+  } else {
+    labels.insert({"ceph_daemon", quote(daemon_name)});
   }
-  return {labels, new_metric_name};
+  return labels;
 }
 
 // Add fixed name metrics from existing ones that have details in their names
