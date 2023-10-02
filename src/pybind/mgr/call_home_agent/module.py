@@ -15,11 +15,6 @@ from datetime import datetime
 
 from mgr_module import (Option, CLIReadCommand, CLIWriteCommand, MgrModule,
                         HandleCommandResult)
-from .options import (CHA_TARGET, INTERVAL_INVENTORY_REPORT_SECONDS,
-                      INTERVAL_PERFORMANCE_REPORT_SECONDS,
-                      INTERVAL_STATUS_REPORT_SECONDS,
-                      INTERVAL_LAST_CONTACT_REPORT_SECONDS,
-                      SI_WEB_SERVICE_URL)
 # from .dataClasses import ReportHeader, ReportEvent
 from .dataDicts import ReportHeader, ReportEvent
 
@@ -182,36 +177,36 @@ class CallHomeAgent(MgrModule):
         Option(
             name='target',
             type='str',
-            default=CHA_TARGET,
-            desc='Call Home end point'
+            default='https://esupport.ibm.com/connect/api/v1',
+            desc='Call Home endpoint'
         ),
         Option(
             name='interval_inventory_report_seconds',
             type='int',
             min=0,
-            default=INTERVAL_INVENTORY_REPORT_SECONDS,
+            default=60 * 60 * 24,  # one day
             desc='Time frequency for the inventory report'
         ),
         Option(
             name='interval_performance_report_seconds',
             type='int',
             min=0,
-            default=INTERVAL_PERFORMANCE_REPORT_SECONDS,
+            default=60 * 5,  # 5 minutes
             desc='Time frequency for the performance report'
         ),
         Option(
             name='interval_status_report_seconds',
             type='int',
             min=0,
-            default=INTERVAL_STATUS_REPORT_SECONDS,
+            default=60 * 30,  # 30 minutes
             desc='Time frequency for the status report'
         ),
         Option(
             name='interval_last_contact_report_seconds',
             type='int',
             min=0,
-            default=INTERVAL_LAST_CONTACT_REPORT_SECONDS,
-            desc='Time frequency for the status report'
+            default=60 * 5,  # 5 minutes
+            desc='Time frequency for the last contact report'
         ),
         Option(
             name='customer_email',
@@ -312,7 +307,7 @@ class CallHomeAgent(MgrModule):
         Option(
             name='si_web_service_url',
             type='str',
-            default=SI_WEB_SERVICE_URL,
+            default='https://join.insights.ibm.com/api/v1/em-integration',
             desc='URL used to register Ceph cluster in SI (staging or production)'
         ),
         Option(
@@ -346,7 +341,8 @@ class CallHomeAgent(MgrModule):
 
     def refresh_options(self):
         # Env vars (if they exist) have preference over module options
-        self.cha_target_url = str(os.environ.get('CHA_TARGET', self.get_module_option('target', )))
+        self.cha_target_url = str(os.environ.get('CHA_TARGET', self.get_module_option('target')))
+
         self.interval_inventory_seconds = int(
             os.environ.get('CHA_INTERVAL_INVENTORY_REPORT_SECONDS',
                            self.get_module_option('interval_inventory_report_seconds')))  # type: ignore
