@@ -6043,9 +6043,9 @@ def verify_call_home_settings(ctx: CephadmContext) -> None:
         ):
             err_msg = ('In order to enable IBM call home, all necessary settings '
                        'must be provided. This includes the ibm customer number '
-                       '(--call-home-icn), contact email (--ceph-call-home-contect-email), '
-                       'contact phone number (--ceph-call-home-context-phone), first name of contact '
-                       '(--ceph-call-home-contact-first-name), last name of contact (--ceph-call-home-contact-first-name) '
+                       '(--call-home-icn), contact email (--ceph-call-home-contact-email), '
+                       'contact phone number (--ceph-call-home-contact-phone), first name of contact '
+                       '(--ceph-call-home-contact-first-name), last name of contact (--ceph-call-home-contact-last-name) '
                        'and country code (--ceph-call-home-country-code).\n'
                        'These options may be provided directly through their flags or through a json config '
                        'whose filepath may be passed to --call-home-config and should be structured as\n'
