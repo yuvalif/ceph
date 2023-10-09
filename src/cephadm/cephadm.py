@@ -6094,8 +6094,8 @@ def apply_call_home_settings(ctx: CephadmContext, cli: Callable, wait_for_mgr_re
     cli(['config', 'set', 'mgr', 'mgr/call_home_agent/icn', ctx.call_home_icn])
     cli(['config', 'set', 'mgr', 'mgr/call_home_agent/customer_email', ctx.ceph_call_home_contact_email])
     cli(['config', 'set', 'mgr', 'mgr/call_home_agent/customer_phone', ctx.ceph_call_home_contact_phone])
-    cli(['config', 'set', 'mgr', 'mgr/call_home_agent/customer_email', ctx.ceph_call_home_contact_first_name])
-    cli(['config', 'set', 'mgr', 'mgr/call_home_agent/customer_email', ctx.ceph_call_home_contact_last_name])
+    cli(['config', 'set', 'mgr', 'mgr/call_home_agent/customer_first_name', ctx.ceph_call_home_contact_first_name])
+    cli(['config', 'set', 'mgr', 'mgr/call_home_agent/customer_last_name', ctx.ceph_call_home_contact_last_name])
     cli(['config', 'set', 'mgr', 'mgr/call_home_agent/customer_country_code', ctx.ceph_call_home_country_code])
 
     if not ctx.enable_storage_insights:
