@@ -6139,7 +6139,7 @@ def command_bootstrap(ctx):
         else:
             logger.warning('Specifying an fsid for your cluster offers no advantages and may increase the likelihood of fsid conflicts.')
 
-    if ctx.enable_storage_insights and not ctx.enable_call_home:
+    if ctx.enable_storage_insights and not ctx.enable_ibm_call_home:
         raise Error('Cannot enable Storage Insights without enabling call home (--enable-ibm-call-home)')
     elif ctx.enable_ibm_call_home:
         verify_call_home_settings(ctx)
