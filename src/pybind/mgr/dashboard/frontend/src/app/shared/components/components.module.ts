@@ -55,6 +55,7 @@ import { CallHomeModalComponent } from '~/app/shared/components/call-home-modal/
 import { CallHomeNotificationComponent } from './call-home-notification/call-home-notification.component';
 import { StorageInsightsModalComponent } from './storage-insights-modal/storage-insights-modal.component';
 import { StorageInsightsNotificationComponent } from './storage-insights-notification/storage-insights-notification.component';
+import { VerticalNavigationComponent } from './vertical-navigation/vertical-navigation.component';
 
 @NgModule({
   imports: [
@@ -113,7 +114,8 @@ import { StorageInsightsNotificationComponent } from './storage-insights-notific
     CallHomeModalComponent,
     CallHomeNotificationComponent,
     StorageInsightsModalComponent,
-    StorageInsightsNotificationComponent
+    StorageInsightsNotificationComponent,
+    VerticalNavigationComponent
   ],
   providers: [],
   exports: [
@@ -148,7 +150,8 @@ import { StorageInsightsNotificationComponent } from './storage-insights-notific
     CardRowComponent,
     CallHomeModalComponent,
     CallHomeNotificationComponent,
-    StorageInsightsNotificationComponent
+    StorageInsightsNotificationComponent,
+    VerticalNavigationComponent
   ]
 })
 export class ComponentsModule {}
