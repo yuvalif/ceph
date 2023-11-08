@@ -325,6 +325,9 @@ public:
 
   std::set<client_t> client_reclaim_gather;
 
+  const bufferlist& get_snap_trace(Session *session, SnapRealm *realm) const;
+  const bufferlist& get_snap_trace(client_t client, SnapRealm *realm) const;
+
   std::set<client_t> get_laggy_clients() const {
     return laggy_clients;
   }
