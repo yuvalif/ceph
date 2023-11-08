@@ -92,6 +92,7 @@ class ReportEvent:
                     },
                     "description": "".format(description),
                     "payload": {
+                        "request_time": event_time_ms,
                         "content": content,
                         "ibm_customer_number": icn,
                         "product_id_list" : [
