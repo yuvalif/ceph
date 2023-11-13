@@ -1232,3 +1232,4 @@ void rgw_topic_stats::dump(Formatter *f) const {
 }
 
 } // namespace rgw::notify
+
