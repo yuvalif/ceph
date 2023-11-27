@@ -389,6 +389,7 @@ struct rgw_pubsub_dest {
   void dump(Formatter *f) const;
   void dump_xml(Formatter *f) const;
   std::string to_json_str() const;
+  void decode_json(JSONObj* obj);
 };
 WRITE_CLASS_ENCODER(rgw_pubsub_dest)
 
@@ -435,6 +436,7 @@ struct rgw_pubsub_topic {
   void dump(Formatter *f) const;
   void dump_xml(Formatter *f) const;
   void dump_xml_as_attributes(Formatter *f) const;
+  void decode_json(JSONObj* obj);
 
   bool operator<(const rgw_pubsub_topic& t) const {
     return to_str().compare(t.to_str());
@@ -639,6 +641,18 @@ public:
   // if the topic does not exists it is a no-op (considered success)
   // return 0 on success, error code otherwise
   int remove_topic(const DoutPrefixProvider *dpp, const std::string& name, optional_yield y) const;
+  // remove a topic according to its name
+  // if the topic does not exists it is a no-op (considered success)
+  // return 0 on success, error code otherwise
+  int remove_topic_v2(const DoutPrefixProvider* dpp,
+                      const std::string& name,
+                      optional_yield y) const;
+  // create a topic with a name only
+  // if the topic already exists it is a no-op (considered success)
+  // return 0 on success, error code otherwise
+  int create_topic(const DoutPrefixProvider* dpp,
+                   const rgw_pubsub_topic& topic,
+                   optional_yield y) const;
 };
 
 namespace rgw::notify {
