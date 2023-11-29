@@ -3939,6 +3939,12 @@ def test_ps_s3_persistent_notification_kafka():
     persistent_notification('kafka')
 
 
+@attr('kafka_test')
+def test_fail_kafka():
+    """ test fail kafka """
+    assert False, 'stops test for manual debug'
+
+
 def random_string(length):
     import string
     letters = string.ascii_letters
