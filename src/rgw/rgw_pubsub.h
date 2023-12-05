@@ -663,3 +663,23 @@ namespace rgw::notify {
   // Used in case the topic is using the default global value for dumping in a formatter
   constexpr static const std::string_view DEFAULT_CONFIG{"None"};
 }
+
+std::string topic_to_unique(const std::string& topic,
+                            const std::string& notification);
+
+std::optional<rgw_pubsub_topic_filter> find_unique_topic(
+    const rgw_pubsub_bucket_topics& bucket_topics,
+    const std::string& notif_name);
+
+// Delete the bucket notification if |notification_id| is passed, else delete
+// all the bucket notifications for the given |bucket| and update the topic
+// bucket mapping.
+int remove_notification_v2(const DoutPrefixProvider* dpp,
+                           rgw::sal::Driver* driver,
+                           rgw::sal::Bucket* bucket,
+                           const std::string& notification_id,
+                           optional_yield y);
+
+int get_bucket_notifications(const DoutPrefixProvider* dpp,
+                             rgw::sal::Bucket* bucket,
+                             rgw_pubsub_bucket_topics& bucket_topics);
