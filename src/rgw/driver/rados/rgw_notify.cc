@@ -16,6 +16,7 @@
 #include "rgw_pubsub_push.h"
 #include "rgw_zone_features.h"
 #include "rgw_perf_counters.h"
+#include "services/svc_zone.h"
 #include "common/dout.h"
 #include <chrono>
 
@@ -961,13 +962,21 @@ static inline bool notification_match(reservation_t& res,
 		      reservation_t& res,
 		      const RGWObjTags* req_tags)
 {
-  const RGWPubSub ps(res.store, res.user_tenant);
-  const RGWPubSub::Bucket ps_bucket(ps, res.bucket);
   rgw_pubsub_bucket_topics bucket_topics;
-  auto rc = ps_bucket.get_topics(res.dpp, bucket_topics, res.yield);
-  if (rc < 0) {
-    // failed to fetch bucket topics
-    return rc;
+  if (res.store->svc()->zone->get_zonegroup().supports(
+          rgw::zone_features::notification_v2)) {
+    const auto ret = get_bucket_notification_bl(dpp, res.bucket, bucket_topics);
+    if (ret < 0) {
+      return -ret;
+    }
+  } else {
+    const RGWPubSub ps(res.store, res.user_tenant);
+    const RGWPubSub::Bucket ps_bucket(ps, res.bucket);
+    auto rc = ps_bucket.get_topics(res.dpp, bucket_topics, res.yield);
+    if (rc < 0) {
+      // failed to fetch bucket topics
+      return rc;
+    }
   }
   for (const auto& bucket_topic : bucket_topics.topics) {
     const rgw_pubsub_topic_filter& topic_filter = bucket_topic.second;
@@ -1008,7 +1017,20 @@ static inline bool notification_match(reservation_t& res,
         return ret;
       }
     }
-    res.topics.emplace_back(topic_filter.s3_id, topic_cfg, res_id);
+    // load the topic,if there is change in topic config while it's stored in
+    // notification.
+    rgw_pubsub_topic result;
+    const RGWPubSub ps(res.store, res.user_tenant);
+    auto ret = ps.get_topic(res.dpp, topic_cfg.name, result, res.yield);
+    if (ret < 0) {
+      ldpp_dout(res.dpp, 1)
+          << "ERROR: failed to load topic: " << topic_cfg.name
+          << ". error: " << ret
+          << ", using the stored topic from bucket notification" << dendl;
+      res.topics.emplace_back(topic_filter.s3_id, topic_cfg, res_id);
+    } else {
+      res.topics.emplace_back(topic_filter.s3_id, result, res_id);
+    }
   }
   return 0;
 }
@@ -1202,23 +1224,34 @@ reservation_t::reservation_t(const DoutPrefixProvider* _dpp,
 }
 
 reservation_t::reservation_t(const DoutPrefixProvider* _dpp,
-			     rgw::sal::RadosStore* _store,
-			     rgw::sal::Object* _object,
-			     rgw::sal::Object* _src_object,
-			     rgw::sal::Bucket* _bucket,
-			     const std::string& _user_id,
-			     const std::string& _user_tenant,
-			     const std::string& _req_id,
-			     optional_yield y) :
-    dpp(_dpp), store(_store), s(nullptr), size(0) /* XXX */,
-    object(_object), src_object(_src_object), bucket(_bucket),
-    object_name(nullptr),
-    metadata_fetched_from_attributes(false),
-    user_id(_user_id),
-    user_tenant(_user_tenant),
-    req_id(_req_id),
-    yield(y)
-{}
+                             rgw::sal::RadosStore* _store,
+                             rgw::sal::Object* _object,
+                             rgw::sal::Object* _src_object,
+                             rgw::sal::Bucket* _bucket,
+                             const std::string& _user_id,
+                             const std::string& _user_tenant,
+                             const std::string& _req_id,
+                             optional_yield y)
+    : dpp(_dpp),
+      store(_store),
+      s(nullptr),
+      size(0) /* XXX */,
+      object(_object),
+      src_object(_src_object),
+      bucket(_bucket),
+      object_name(nullptr),
+      metadata_fetched_from_attributes(false),
+      user_id(_user_id),
+      user_tenant(_user_tenant),
+      req_id(_req_id),
+      yield(y) {
+  if (store->svc()->zone->get_zonegroup().supports(
+          rgw::zone_features::notification_v2)) {
+    //  for non-request caller (e.g., lifecycle, ObjectSync), bucket attrs
+    //  are not loaded, so force to reload the bucket, that reloads the attr.
+    bucket->load_bucket(dpp, yield);
+  }
+}
 
 reservation_t::~reservation_t() {
   publish_abort(*this);
