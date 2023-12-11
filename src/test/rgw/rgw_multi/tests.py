@@ -17,7 +17,7 @@ from boto.s3.website import WebsiteConfiguration
 from boto.s3.cors import CORSConfiguration
 
 from nose.tools import eq_ as eq
-from nose.tools import assert_not_equal, assert_equal
+from nose.tools import assert_not_equal, assert_equal, assert_true, assert_false
 from nose.plugins.attrib import attr
 from nose.plugins.skip import SkipTest
 
@@ -66,6 +66,7 @@ num_buckets = 0
 run_prefix=''.join(random.choice(string.ascii_lowercase) for _ in range(6))
 
 num_roles = 0
+num_topic = 0
 
 def get_zone_connection(zone, credentials):
     """ connect to the zone's first gateway """
@@ -453,6 +454,13 @@ def gen_role_name():
     num_roles += 1
     return "roles" + '-' + run_prefix + '-' + str(num_roles)
 
+
+def gen_topic_name():
+    global num_topic
+
+    num_topic += 1
+    return "topic" + '-' + run_prefix + '-' + str(num_topic)
+
 class ZonegroupConns:
     def __init__(self, zonegroup):
         self.zonegroup = zonegroup
@@ -499,6 +507,45 @@ def check_all_buckets_dont_exist(zone_conn, buckets):
         return False
 
     return True
+
+
+def get_notification_ids(zone, bucket_name):
+    """
+    Get id's of notification on a bucket.
+    """
+    cmd = ['notification', 'list'] + zone.zone_args()
+    cmd += ['--bucket', bucket_name]
+    notif_json, _ = zone.cluster.admin(cmd, read_only=True)
+    notifs = json.loads(notif_json)
+    return [n['Id'] for n in notifs['notifications']]
+
+
+def get_topic_arns(zone):
+    """
+    Get arn_name of topics in cluster.
+    """
+    cmd = ['topic', 'list'] + zone.zone_args()
+    topics_json, _ = zone.cluster.admin(cmd, read_only=True)
+    topics = json.loads(topics_json)
+    return [t['arn'] for t in topics['topics']]
+
+
+def create_topic_per_zone(zonegroup_conns, topics_per_zone=1):
+    topics = []
+    zone_topic = []
+    for zone in zonegroup_conns.rw_zones:
+        for _ in range(topics_per_zone):
+            topic_name = gen_topic_name()
+            log.info('create topic zone=%s name=%s', zone.name, topic_name)
+            attributes = {
+                "push-endpoint": "http://kaboom:9999",
+                "persistent": "true",
+            }
+            topic_arn = zone.create_topic(topic_name, attributes)
+            topics.append(topic_arn)
+            zone_topic.append((zone, topic_arn))
+
+    return topics, zone_topic
 
 def create_role_per_zone(zonegroup_conns, roles_per_zone = 1):
     roles = []
@@ -2255,7 +2302,7 @@ def test_sync_flow_directional_zonegroup_select():
     """
     test_sync_flow_directional_zonegroup_select:
         allow sync from only zoneA to zoneB
-        
+
         verify that data doesn't get synced to zoneC and
         zoneA shouldn't sync data from zoneB either
     """
@@ -2417,7 +2464,7 @@ def test_sync_single_bucket():
     set_sync_policy_group_status(c1, "sync-group", "enabled")
     get_sync_policy(c1)
     zonegroup.period.update(zoneA, commit=True)
-    
+
     sync_info(c1)
 
     # create objects in bucketA & bucketB
@@ -2859,3 +2906,77 @@ def test_sync_single_bucket_to_multiple():
     remove_sync_policy_group(c1, "sync-bucket", bucketA.name)
     remove_sync_policy_group(c1, "sync-group")
     return
+
+def test_topic_notification_sync():
+    zonegroup = realm.master_zonegroup()
+    # enable notification replication.
+    arg = ['--enable-feature=notification_v2']
+    for z in zonegroup.zones:
+        z.modify(z.cluster, arg)
+    zonegroup.modify(zonegroup.master_zone.cluster, arg)
+    zonegroup.period.update(zonegroup.master_zone, commit=True)
+    # let wait for users and other settings to sync across all zones.
+    time.sleep(config.checkpoint_delay)
+    # create topics in each zone.
+    zonegroup_conns = ZonegroupConns(zonegroup)
+    topic_arns, zone_topic = create_topic_per_zone(zonegroup_conns)
+    log.debug("topic_arns: %s", topic_arns)
+
+    zonegroup_meta_checkpoint(zonegroup)
+
+    # verify topics exists in all zones
+    for conn in zonegroup_conns.zones:
+        topic_list = conn.list_topics()
+        log.debug("topics for zone=%s = %s", conn.name, topic_list)
+        assert_equal(len(topic_list), len(topic_arns))
+        for topic_arn_map in topic_list:
+            assert_true(topic_arn_map['TopicArn'] in topic_arns)
+
+    # create a bucket
+    bucket = zonegroup_conns.rw_zones[0].create_bucket(gen_bucket_name())
+    log.debug('created bucket=%s', bucket.name)
+    zonegroup_meta_checkpoint(zonegroup)
+
+    # create bucket_notification in each zone.
+    notification_ids = []
+    num = 1
+    for zone_conn, topic_arn in zone_topic:
+        noti_id = "bn" + '-' + run_prefix + '-' + str(num)
+        notification_ids.append(noti_id)
+        topic_conf = {'Id': noti_id,
+                      'TopicArn': topic_arn,
+                      'Events': ['s3:ObjectCreated:*']
+                     }
+        num += 1
+        log.info('creating bucket notification for zone=%s name=%s', zone_conn.name, noti_id)
+        zone_conn.create_notification(bucket.name, [topic_conf])
+    zonegroup_meta_checkpoint(zonegroup)
+
+    # verify notifications exists in all zones
+    for conn in zonegroup_conns.zones:
+        notification_list = conn.list_notifications(bucket.name)
+        log.debug("notifications for zone=%s = %s", conn.name, notification_list)
+        assert_equal(len(notification_list), len(topic_arns))
+        for notification in notification_list:
+            assert_true(notification['Id'] in notification_ids)
+
+    # delete notifications
+    zonegroup_conns.rw_zones[0].delete_notifications(bucket.name)
+    log.debug('Deleting all notifications for  bucket=%s', bucket.name)
+    zonegroup_meta_checkpoint(zonegroup)
+
+    # verify notification deleted in all zones
+    for conn in zonegroup_conns.zones:
+        notification_list = conn.list_notifications(bucket.name)
+        assert_equal(len(notification_list), 0)
+
+    # delete topics
+    for zone_conn, topic_arn in zone_topic:
+        log.debug('deleting topic zone=%s arn=%s', zone_conn.name, topic_arn)
+        zone_conn.delete_topic(topic_arn)
+    zonegroup_meta_checkpoint(zonegroup)
+
+    # verify topics deleted in all zones
+    for conn in zonegroup_conns.zones:
+        topic_list = conn.list_topics()
+        assert_equal(len(topic_list), 0)
