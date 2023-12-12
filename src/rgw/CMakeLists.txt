@@ -149,6 +149,7 @@ set(librgw_common_srcs
   rgw_lua_background.cc
   rgw_bucket_logging.cc
   rgw_rest_bucket_logging.cc
+  rgw_data_access.cc
   driver/rados/cls_fifo_legacy.cc
   driver/rados/rgw_bucket.cc
   driver/rados/rgw_bucket_sync.cc
