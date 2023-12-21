@@ -175,6 +175,23 @@ class RadosStore : public StoreDriver {
                         RGWObjVersionTracker* objv_tracker,
                         optional_yield y,
                         const DoutPrefixProvider* dpp) override;
+    /* Update the bucket-topic mapping in the omap, if |add_mapping|=true then
+     * adding the |bucket_str| to omap, else delete the |bucket_str| from the
+     * omap.  */
+    int update_bucket_topic_mapping(const rgw_pubsub_topic& topic,
+                                    rgw::sal::Bucket* bucket,
+                                    bool add_mapping,
+                                    optional_yield y,
+                                    const DoutPrefixProvider* dpp) override;
+    /** Get the bucket-topic mapping from the omap */
+    int get_bucket_topic_mapping(const rgw_pubsub_topic& topic,
+                                 std::set<std::string>& bucket_keys,
+                                 optional_yield y,
+                                 const DoutPrefixProvider* dpp) override;
+    /** Remove the bucket-topic mapping omap */
+    int delete_bucket_topic_omap(const rgw_pubsub_topic& topic,
+                                 optional_yield y,
+                                 const DoutPrefixProvider* dpp) override;
     virtual RGWLC* get_rgwlc(void) override { return rados->get_lc(); }
     virtual RGWCoroutinesManagerRegistry* get_cr_registry() override { return rados->get_cr_registry(); }
 

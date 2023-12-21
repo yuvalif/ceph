@@ -410,7 +410,8 @@ void RGWPSGetTopicOp::execute(optional_yield y) {
     return;
   }
   const RGWPubSub ps(driver, s->owner.id.tenant);
-  op_ret = ps.get_topic(this, topic_name, result, y);
+  op_ret =
+      ps.get_topic(this, topic_name, result, y, /*fetch_bucket_mapping=*/true);
   if (op_ret < 0) {
     ldpp_dout(this, 1) << "failed to get topic '" << topic_name << "', ret=" << op_ret << dendl;
     return;
@@ -494,7 +495,8 @@ void RGWPSGetTopicAttributesOp::execute(optional_yield y) {
     return;
   }
   const RGWPubSub ps(driver, s->owner.id.tenant);
-  op_ret = ps.get_topic(this, topic_name, result, y);
+  op_ret =
+      ps.get_topic(this, topic_name, result, y, /*fetch_bucket_mapping=*/true);
   if (op_ret < 0) {
     ldpp_dout(this, 1) << "failed to get topic '" << topic_name << "', ret=" << op_ret << dendl;
     return;
@@ -1149,7 +1151,6 @@ void RGWPSCreateNotifOp::execute_v2(optional_yield y) {
   }
   const RGWPubSub ps(driver, s->owner.id.tenant);
   std::unordered_map<std::string, rgw_pubsub_topic> topics;
-  const auto rgwbucket = rgw_bucket(s->bucket_tenant, s->bucket_name, "");
   for (const auto& c : configurations.list) {
     const auto& notif_name = c.id;
     if (notif_name.empty()) {
@@ -1219,6 +1220,16 @@ void RGWPSCreateNotifOp::execute_v2(optional_yield y) {
         << "Failed to store RGW_ATTR_BUCKET_NOTIFICATION on bucket="
         << bucket->get_name() << " returned err= " << op_ret << dendl;
     return;
+  }
+  for (const auto& [_, topic] : topics) {
+    const auto ret = driver->update_bucket_topic_mapping(
+        topic, bucket.get(), /*add_mapping=*/true, y, this);
+    if (ret < 0) {
+      ldpp_dout(this, 1) << "Failed to remove topic mapping on bucket="
+                         << bucket->get_name() << " ret= " << ret << dendl;
+      // error should be reported ??
+      // op_ret = ret;
+    }
   }
   ldpp_dout(this, 20) << "successfully created bucket notification for bucket: "
                       << bucket->get_name() << dendl;

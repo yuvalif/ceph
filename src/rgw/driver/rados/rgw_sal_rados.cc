@@ -1170,6 +1170,91 @@ int RadosStore::remove_topic_v2(const std::string& topic_name,
                                            params, objv_tracker, y, dpp);
 }
 
+int RadosStore::update_bucket_topic_mapping(const rgw_pubsub_topic& topic,
+                                            rgw::sal::Bucket* bucket,
+                                            bool add_mapping,
+                                            optional_yield y,
+                                            const DoutPrefixProvider* dpp) {
+  const auto& bucket_str =
+      rgw_make_bucket_entry_name(bucket->get_tenant(), bucket->get_name());
+  bufferlist empty_bl;
+  librados::ObjectWriteOperation op;
+  int ret = 0;
+  if (add_mapping) {
+    std::map<std::string, bufferlist> mapping{{bucket_str, empty_bl}};
+    op.omap_set(mapping);
+  } else {
+    std::set<std::string> to_rm{{bucket_str}};
+    op.omap_rm_keys(to_rm);
+  }
+  ret = rgw_rados_operate(dpp, rados->get_notif_pool_ctx(),
+                          get_bucket_topic_mapping_oid(topic), &op, y);
+  const auto str = add_mapping ? "add" : "remove";
+  if (ret < 0) {
+    ldpp_dout(dpp, 1) << "ERROR: failed to " << str
+                      << " topic bucket mapping for bucket: "
+                      << bucket->get_name() << " and topic: " << topic.name
+                      << " with ret:" << ret << dendl;
+    return ret;
+  }
+  ldpp_dout(dpp, 20) << "Successfully " << str
+                     << " topic bucket mapping for bucket: "
+                     << bucket->get_name() << " and topic: " << topic.name
+                     << dendl;
+  return ret;
+}
+
+int RadosStore::get_bucket_topic_mapping(const rgw_pubsub_topic& topic,
+                                         std::set<std::string>& bucket_keys,
+                                         optional_yield y,
+                                         const DoutPrefixProvider* dpp) {
+  constexpr auto max_chunk = 1024U;
+  std::string start_after;
+  bool more = true;
+  int rval;
+  while (more) {
+    librados::ObjectReadOperation op;
+    std::set<std::string> curr_keys;
+    op.omap_get_keys2(start_after, max_chunk, &curr_keys, &more, &rval);
+    const auto ret =
+        rgw_rados_operate(dpp, rados->get_notif_pool_ctx(),
+                          get_bucket_topic_mapping_oid(topic), &op, nullptr, y);
+    if (ret == -ENOENT) {
+      // mapping object was not created - nothing to do
+      return 0;
+    }
+    if (ret < 0) {
+      // TODO: do we need to check on rval as well as ret?
+      ldpp_dout(dpp, 1)
+          << "ERROR: failed to read bucket topic mapping object for topic: "
+          << topic.name << ", ret= " << ret << dendl;
+      return ret;
+    }
+    bucket_keys.merge(curr_keys);
+  }
+  return 0;
+}
+
+int RadosStore::delete_bucket_topic_omap(const rgw_pubsub_topic& topic,
+                                         optional_yield y,
+                                         const DoutPrefixProvider* dpp) {
+  librados::ObjectWriteOperation op;
+  op.remove();
+  const int ret =
+      rgw_rados_operate(dpp, rados->get_notif_pool_ctx(),
+                        get_bucket_topic_mapping_oid(topic), &op, y);
+  if (ret < 0 && ret != -ENOENT) {
+    ldpp_dout(dpp, -1)
+        << "ERROR: failed removing bucket topic mapping omap for topic: "
+        << topic.name << ", ret=" << ret << dendl;
+    return ret;
+  }
+  ldpp_dout(dpp, 20)
+      << "Successfully deleted topic bucket mapping omap for topic: "
+      << topic.name << dendl;
+  return ret;
+}
+
 int RadosStore::delete_raw_obj(const DoutPrefixProvider *dpp, const rgw_raw_obj& obj, optional_yield y)
 {
   return rados->delete_raw_obj(dpp, obj, y);

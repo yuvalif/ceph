@@ -400,20 +400,23 @@ struct rgw_pubsub_topic {
   std::string arn;
   std::string opaque_data;
   std::string policy_text;
+  // only populated when displaying topics.
+  std::set<std::string> subscribed_buckets;
 
   void encode(bufferlist& bl) const {
-    ENCODE_START(4, 1, bl);
+    ENCODE_START(5, 1, bl);
     encode(user, bl);
     encode(name, bl);
     encode(dest, bl);
     encode(arn, bl);
     encode(opaque_data, bl);
     encode(policy_text, bl);
+    encode(subscribed_buckets, bl);
     ENCODE_FINISH(bl);
   }
 
   void decode(bufferlist::const_iterator& bl) {
-    DECODE_START(4, bl);
+    DECODE_START(5, bl);
     decode(user, bl);
     decode(name, bl);
     if (struct_v >= 2) {
@@ -425,6 +428,9 @@ struct rgw_pubsub_topic {
     }
     if (struct_v >= 4) {
       decode(policy_text, bl);
+    }
+    if (struct_v >= 5) {
+      decode(subscribed_buckets, bl);
     }
     DECODE_FINISH(bl);
   }
@@ -629,7 +635,11 @@ public:
   // get a topic with by its name and populate it into "result"
   // return -ENOENT if the topic does not exists 
   // return 0 on success, error code otherwise
-  int get_topic(const DoutPrefixProvider *dpp, const std::string& name, rgw_pubsub_topic& result, optional_yield y) const;
+  int get_topic(const DoutPrefixProvider* dpp,
+                const std::string& name,
+                rgw_pubsub_topic& result,
+                optional_yield y,
+                bool fetch_bucket_mapping = false) const;
   // create a topic with a name only
   // if the topic already exists it is a no-op (considered success)
   // return 0 on success, error code otherwise

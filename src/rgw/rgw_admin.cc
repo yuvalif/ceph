@@ -10548,7 +10548,8 @@ next:
     RGWPubSub ps(driver, tenant);
 
     rgw_pubsub_topic topic;
-    ret = ps.get_topic(dpp(), topic_name, topic, null_yield);
+    ret = ps.get_topic(dpp(), topic_name, topic, null_yield,
+                       /*fetch_bucket_mapping=*/true);
     if (ret < 0) {
       cerr << "ERROR: could not get topic: " << cpp_strerror(-ret) << std::endl;
       return -ret;
