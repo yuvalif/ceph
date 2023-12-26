@@ -72,7 +72,7 @@ def _config_user(bntests_conf, section, user):
 @contextlib.contextmanager
 def pre_process(ctx, config):
     """
-    This function creates a directory which is required to run some AMQP tests.
+    This function creates a directory which is required to run tests that requires our s3 extension.
     """
     assert isinstance(config, dict)
     log.info('Pre-processing...')
@@ -218,6 +218,9 @@ def create_realm(ctx, config):
             )
 
         zone = zonegroup+'-1'
+        access_key = bntests_conf[user_section]['access_key']
+        secret = bntests_conf[user_section]['secret_key']
+        endpoints = bntests_conf['DEFAULT']['host']+':'+str(bntests_conf['DEFAULT']['port'])+','
         log.debug('Creating zone {zone} on {host}'.format(zone=zone, host=client))
         ctx.cluster.only(client).run(
             args=[
@@ -229,14 +232,14 @@ def create_realm(ctx, config):
                 'zone', 'create',
                 '--rgw-zonegroup', zonegroup,
                 '--rgw-zone', zone,
-                '--access-key', bntests_conf[user_section]['access_key'],
-                '--secret', bntests_conf[user_section]['secret_key'],
-                '--endpoints', ctx.rgw.role_endpoints.get(client),
+                '--access-key', access_key,
+                '--secret', secret,
+                '--endpoints', endpoints,
                 '--default',
                 '--cluster', cluster_name,
                 ],
             )
-        
+
         log.debug('Commit period on {host}'.format(host=client))
         ctx.cluster.only(client).run(
             args=[
@@ -251,7 +254,10 @@ def create_realm(ctx, config):
                 ],
             )
 
-        # TODO: try yiedl + finally cleanup
+    try:
+        yield
+    finally:
+        log.info('Removing zone, zonegroup and realm...')
 
 
 @contextlib.contextmanager
@@ -354,7 +360,7 @@ def task(ctx,config):
     parameters in your teuthology-suite command. Example command for this is as follows::
 
     teuthology-suite --ceph-repo https://github.com/ceph/ceph-ci.git -s rgw:notifications --ceph your_ceph_branch_name -m smithi --suite-repo https://github.com/your_name/ceph.git --suite-branch your_branch_name
-    
+
     """
     assert config is None or isinstance(config, list) \
         or isinstance(config, dict), \
@@ -381,10 +387,10 @@ def task(ctx,config):
             version = 'v1'
 
         if version == 'v2':
-            zonegroeup = 'zg1'
+            zonegroup = 'zg1'
             cluster = 'c1'
         elif version == 'v1':
-            zonegroeup = 'default'
+            zonegroup = 'default'
             cluster = 'noname'
         else:
             assert False, 'bntests: invalid version {}'.format(version)
