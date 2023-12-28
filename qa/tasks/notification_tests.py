@@ -114,6 +114,8 @@ def pre_process(ctx, config):
                 )
 
 
+user_section = 's3 main'
+
 @contextlib.contextmanager
 def create_users(ctx, config):
     """
@@ -123,7 +125,7 @@ def create_users(ctx, config):
     log.info('Creating rgw user...')
     testdir = teuthology.get_testdir(ctx)
 
-    users = {'s3 main': 'foo'}
+    users = {user_section: 'foo'}
     for client in config['clients']:
         bntests_conf = config['bntests_conf'][client]
         for section, user in users.items():
@@ -168,6 +170,89 @@ def create_users(ctx, config):
                         '--cluster', cluster_name,
                         ],
                     )
+
+@contextlib.contextmanager
+def create_realm(ctx, config):
+    """
+    Create a realm with single zonegroup and single zone
+    """
+    assert isinstance(config, dict)
+    testdir = teuthology.get_testdir(ctx)
+
+    realm = 'earth'
+    for client in config['clients']:
+        bntests_conf = config['bntests_conf'][client]
+        if bntests_conf['DEFAULT']['version'] == 'v1':
+            continue
+        cluster_name, daemon_type, client_id = teuthology.split_role(client)
+        client_with_id = daemon_type + '.' + client_id
+        log.debug('Creating realm {realm} on {host}'.format(realm=realm, host=client))
+        ctx.cluster.only(client).run(
+            args=[
+                'adjust-ulimits',
+                'ceph-coverage',
+                '{tdir}/archive/coverage'.format(tdir=testdir),
+                'radosgw-admin',
+                '-n', client_with_id,
+                'realm', 'create',
+                '--rgw-realm', realm,
+                '--cluster', cluster_name,
+                ],
+            )
+
+        zonegroup = bntests_conf['DEFAULT']['zonegroup']
+        log.debug('Creating zonegroup {zonegroup} on {host}'.format(zonegroup=zonegroup, host=client))
+        ctx.cluster.only(client).run(
+            args=[
+                'adjust-ulimits',
+                'ceph-coverage',
+                '{tdir}/archive/coverage'.format(tdir=testdir),
+                'radosgw-admin',
+                '-n', client_with_id,
+                'zonegroup', 'create',
+                '--rgw-zonegroup', zonegroup,
+                '--master',
+                '--default',
+                '--cluster', cluster_name,
+                ],
+            )
+
+        zone = zonegroup+'-1'
+        log.debug('Creating zone {zone} on {host}'.format(zone=zone, host=client))
+        ctx.cluster.only(client).run(
+            args=[
+                'adjust-ulimits',
+                'ceph-coverage',
+                '{tdir}/archive/coverage'.format(tdir=testdir),
+                'radosgw-admin',
+                '-n', client_with_id,
+                'zone', 'create',
+                '--rgw-zonegroup', zonegroup,
+                '--rgw-zone', zone,
+                '--access-key', bntests_conf[user_section]['access_key'],
+                '--secret', bntests_conf[user_section]['secret_key'],
+                '--endpoints', ctx.rgw.role_endpoints.get(client),
+                '--default',
+                '--cluster', cluster_name,
+                ],
+            )
+        
+        log.debug('Commit period on {host}'.format(host=client))
+        ctx.cluster.only(client).run(
+            args=[
+                'adjust-ulimits',
+                'ceph-coverage',
+                '{tdir}/archive/coverage'.format(tdir=testdir),
+                'radosgw-admin',
+                '-n', client_with_id,
+                'period', 'update',
+                '--commit',
+                '--cluster', cluster_name,
+                ],
+            )
+
+        # TODO: try yiedl + finally cleanup
+
 
 @contextlib.contextmanager
 def configure(ctx, config):
@@ -281,15 +366,28 @@ def task(ctx,config):
         config = all_clients
     if isinstance(config, list):
         config = dict.fromkeys(config)
-    clients=config.keys()
 
     log.debug('Notifications config is %s', config)
 
     bntests_conf = {}
 
-    for client in clients:
+    for client, client_config in config.items():
         endpoint = ctx.rgw.role_endpoints.get(client)
         assert endpoint, 'bntests: no rgw endpoint for {}'.format(client)
+        
+        if 'version' in client_config:
+            version = client_config.get('version')
+        else:
+            version = 'v1'
+
+        if version == 'v2':
+            zonegroeup = 'zg1'
+            cluster = 'c1'
+        elif version == 'v1':
+            zonegroeup = 'default'
+            cluster = 'noname'
+        else:
+            assert False, 'bntests: invalid version {}'.format(version)
 
         bntests_conf[client] = ConfigObj(
             indent_type='',
@@ -298,11 +396,11 @@ def task(ctx,config):
                     {
                     'port':endpoint.port,
                     'host':endpoint.dns_name,
-                    'zonegroup':'default',
-                    'cluster':'noname',
-                    'version':'v1'
+                    'zonegroup':zonegroup,
+                    'cluster':cluster,
+                    'version':version
                     },
-                's3 main':{}
+                user_section:{}
             }
         )
 
@@ -310,7 +408,11 @@ def task(ctx,config):
         lambda: download(ctx=ctx, config=config),
         lambda: pre_process(ctx=ctx, config=config),
         lambda: create_users(ctx=ctx, config=dict(
-                clients=clients,
+                clients=config.keys(),
+                bntests_conf=bntests_conf,
+                )),
+        lambda: create_realm(ctx=ctx, config=dict(
+                clients=config.keys(),
                 bntests_conf=bntests_conf,
                 )),
         lambda: configure(ctx=ctx, config=dict(

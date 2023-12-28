@@ -2,3 +2,8 @@ tasks:
 - notification-tests:
     client.0:
       rgw_server: client.0
+      version: v1
+- notification-tests:
+    client.0:
+      rgw_server: client.0
+      version: v2
