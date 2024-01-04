@@ -140,10 +140,10 @@ Set the IBM tenant ID to be included in reports sent to IBM Storage Insights.
 .. prompt:: bash $
     ceph callhome set tenant owner_tenant_id owner_ibm_id owner_company_name owner_first_name owner_last_name owner_email
 
-**callhome show user info:**
+**callhome get user info:**
 Show the customer information included in reports sent to IBM Call Home and Storae Insights systems.
 .. prompt:: bash $
-    ceph callhome show user info
+    ceph callhome get user info
 
 
 Ceph Call Home Agent configuration
