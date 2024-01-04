@@ -600,7 +600,7 @@ class CallHomeAgent(MgrModule):
         else:
             return HandleCommandResult(stdout=f'IBM tenant id set to {owner_tenant_id}')
 
-    @CLIReadCommand('callhome show user info')
+    @CLIReadCommand('callhome get user info')
     def customer(self) ->  Tuple[int, str, str]:
         """
         Show the information about the customer used to identify the customer
