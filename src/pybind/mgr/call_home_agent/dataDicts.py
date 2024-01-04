@@ -64,7 +64,7 @@ class ReportEvent:
         # Extract jti from JWT. This is another way to identify clusters in addition to the ICN.
         jwt_jti = ""
         try:
-            user_jwt_password = mgr_module.get_store("mgr/cephadm/registry_credentials")["password"]
+            user_jwt_password = r"{}".format(mgr_module.get_store("mgr/cephadm/registry_credentials")["password"])
             registry_url = mgr_module.get_store("mgr/cephadm/registry_credentials")["url"]
             if re.match(mgr_module.valid_container_registry, registry_url):
                 jwt_jti = jwt.decode(user_jwt_password, options={"verify_signature": False})["jti"]
@@ -73,7 +73,7 @@ class ReportEvent:
                                      "url for registry credentials does not "
                                      "match with the expected one")
         except Exception as ex:
-            mgr_module.log.error("not able to extract <jti> from JWT token")
+            mgr_module.log.error("not able to extract <jti> from JWT token: {}".format(ex))
 
         event_data = {
                 "header": {
