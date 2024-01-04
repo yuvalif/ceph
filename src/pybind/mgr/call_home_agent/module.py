@@ -609,13 +609,13 @@ class CallHomeAgent(MgrModule):
         return HandleCommandResult(stdout=json.dumps(
             {'IBM_call_home': {
                     'icn': self.icn,
-                    'first_name': self.customer_first_name,
-                    'last_name': self.customer_last_name,
-                    'phone': self.customer_phone,
-                    'address': self.customer_address,
-                    'email': self.customer_email,
-                    'company': self.customer_company_name,
-                    'country code': self.customer_country_code
+                    'customer_first_name': self.customer_first_name,
+                    'customer_last_name': self.customer_last_name,
+                    'customer_phone': self.customer_phone,
+                    'customer_address': self.customer_address,
+                    'customer_email': self.customer_email,
+                    'customer_company_name': self.customer_company_name,
+                    'customer_country_code': self.customer_country_code
                 },
              'IBM_storage_insights': {
                     'owner_ibm_id': self.owner_ibm_id,
@@ -623,6 +623,6 @@ class CallHomeAgent(MgrModule):
                     'owner_first_name': self.owner_first_name,
                     'owner_last_name': self.owner_last_name,
                     'owner_email': self.owner_email,
-                    'owner_IBM_tenant_id': self.owner_tenant_id
+                    'owner_tenant_id': self.owner_tenant_id
                 },
             }))
