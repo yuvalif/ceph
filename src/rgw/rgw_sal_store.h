@@ -136,6 +136,8 @@ class StoreBucket : public Bucket {
         optional_yield y, const DoutPrefixProvider *dpp) override {return 0;}
     int remove_topics(RGWObjVersionTracker* objv_tracker, 
         optional_yield y, const DoutPrefixProvider *dpp) override {return 0;}
+    int get_logging_object_name(std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) override { return 0;}
+    int set_logging_object_name(RGWObjVersionTracker* objv_tracker, const std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) override { return 0; }
 
     friend class BucketList;
 };

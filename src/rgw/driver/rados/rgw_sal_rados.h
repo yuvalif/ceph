@@ -472,6 +472,7 @@ class RadosBucket : public StoreBucket {
     RadosStore* store;
     RGWAccessControlPolicy acls;
     std::string topics_oid() const;
+    std::string logging_object_name_oid() const;
 
   public:
     RadosBucket(RadosStore *_st)
@@ -555,6 +556,8 @@ class RadosBucket : public StoreBucket {
         optional_yield y, const DoutPrefixProvider *dpp) override;
     int remove_topics(RGWObjVersionTracker* objv_tracker, 
         optional_yield y, const DoutPrefixProvider *dpp) override;
+    int get_logging_object_name(std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) override;
+    int set_logging_object_name(RGWObjVersionTracker* objv_tracker, const std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) override;
 
   private:
     int link(const DoutPrefixProvider* dpp, const rgw_user& new_owner, optional_yield y, bool update_entrypoint = true, RGWObjVersionTracker* objv = nullptr);

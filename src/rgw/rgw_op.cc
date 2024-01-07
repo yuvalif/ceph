@@ -56,6 +56,7 @@
 #include "rgw_torrent.h"
 #include "rgw_lua_data_filter.h"
 #include "rgw_lua.h"
+#include "rgw_bucket_logging.h"
 
 #include "services/svc_zone.h"
 #include "services/svc_quota.h"
@@ -4506,6 +4507,29 @@ void RGWPutObj::execute(optional_yield y)
                                (user_data.empty() ? nullptr : &user_data), nullptr, nullptr,
                                rctx);
   tracepoint(rgw_op, processor_complete_exit, s->req_id.c_str());
+
+  // check if bucket logging is needed
+  if (auto iter = s->bucket->get_attrs().find(RGW_ATTR_BUCKET_LOGGING); iter != attrs.end()) {
+    rgw_bucket_logging configuration;
+    try {
+        configuration.enabled = true;
+        decode(configuration, iter->second);  
+        bucket_logging_short_record record;
+        int ret = log_record(driver, configuration, record, this, y);
+        if (ret < 0) { 
+          if (configuration.records_batch_size == 0) {
+            op_ret = ret;
+            return;
+          } else {
+            ldpp_dout(this, 5) << "WARNING: failed to log record. ret" << ret << dendl;
+          }
+        }
+      } catch (buffer::error& err) {
+        // without decoding the attributes we don't know whther logging is mandatory or not
+        ldpp_dout(this, 5) << "WARNING: failed to decode attribute '" << RGW_ATTR_BUCKET_LOGGING 
+          << "'. error: " << err.what() << dendl;
+      }
+  }
 
   // send request to notification manager
   int ret = res->publish_commit(this, s->obj_size, mtime, etag, s->object->get_instance());

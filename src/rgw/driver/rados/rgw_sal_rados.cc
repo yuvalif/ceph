@@ -13,8 +13,10 @@
  *
  */
 
+#include <asm-generic/errno-base.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <string>
 #include <system_error>
 #include <filesystem>
 #include <unistd.h>
@@ -76,6 +78,7 @@ namespace rgw::sal {
 // (use marker to bridge between calls)
 static constexpr size_t listing_max_entries = 1000;
 static std::string pubsub_oid_prefix = "pubsub.";
+static std::string logging_oid_prefix = "logging.";
 
 static int drain_aio(std::list<librados::AioCompletion*>& handles)
 {
@@ -901,6 +904,47 @@ int RadosBucket::remove_topics(RGWObjVersionTracker* objv_tracker,
       store->svc()->zone->get_zone_params().log_pool,
       topics_oid(),
       objv_tracker, y);
+}
+
+std::string RadosBucket::logging_object_name_oid() const {
+  return logging_oid_prefix + get_tenant() + ".bucket." + get_name() + "/" + get_marker();
+}
+
+int RadosBucket::get_logging_object_name(std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) {
+  // TODO: read from cache and update cache
+
+  rgw_pool data_pool;
+  const auto obj_name_oid = logging_object_name_oid();
+  if (!store->getRados()->get_obj_data_pool(get_placement_rule(), rgw_obj{get_key(), obj_name_oid}, &data_pool)) {
+    return -EIO;
+  }
+  bufferlist bl;
+  const int ret = rgw_get_system_obj(store->svc()->sysobj,
+                               data_pool,
+                               obj_name_oid,
+                               bl,
+                               nullptr, nullptr,
+                               y, dpp, nullptr, nullptr);
+  if (ret < 0) {
+    return ret;
+  }
+  obj_name = bl.to_str();
+  return 0;
+}
+
+int RadosBucket::set_logging_object_name(RGWObjVersionTracker* objv_tracker, const std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) {
+
+  const auto obj_name_oid = logging_object_name_oid();
+  librados::IoCtx ioctx;
+  auto ret = store->get_obj_head_ioctx(dpp, get_info(), rgw_obj{get_key(), obj_name_oid}, &ioctx);
+  if (ret < 0) {
+    return ret;
+  }
+  bufferlist bl;
+  librados::ObjectWriteOperation op;
+  bl.append(obj_name);
+  op.write_full(bl);
+  return rgw_rados_operate(dpp, ioctx, obj_name_oid, &op, y);
 }
 
 std::unique_ptr<User> RadosStore::get_user(const rgw_user &u)

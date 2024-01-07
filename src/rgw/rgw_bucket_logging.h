@@ -3,10 +3,17 @@
 
 #pragma once
 
-#include "rgw_tools.h"
+#include <string>
+#include <optional>
+#include <cstdint>
+#include "rgw_sal_fwd.h"
+#include "include/buffer.h"
+#include "include/encoding.h"
+#include "common/async/yield_context.h"
 
 class XMLObj;
-
+namespace ceph { class Formatter; }
+class DoutPrefixProvider;
 
 /* S3 bucket logging configuration
  * based on: https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketLogging.html
@@ -62,7 +69,7 @@ struct rgw_bucket_logging {
   void dump(Formatter *f) const; // json
   std::string to_json_str() const;
 
-  void encode(bufferlist& bl) const {
+  void encode(ceph::bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
     encode(target_bucket, bl);
     encode(static_cast<int>(obj_key_format), bl);
@@ -172,4 +179,7 @@ inline std::string to_string(const Records& records) {
   }
   return str_records;
 }
+
+int log_record(rgw::sal::Driver* driver, const rgw_bucket_logging& configuration,  
+    const bucket_logging_short_record& record, const DoutPrefixProvider *dpp, optional_yield y);
 

@@ -477,6 +477,12 @@ public:
       optional_yield y, const DoutPrefixProvider *dpp) override {
     return next->remove_topics(objv_tracker, y, dpp);
   }
+  int get_logging_object_name(std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) override {
+    return next->get_logging_object_name(obj_name, y, dpp);
+  }
+  int set_logging_object_name(RGWObjVersionTracker* objv_tracker, const std::string& obj_name, optional_yield y, const DoutPrefixProvider *dpp) override {
+    return next->set_logging_object_name(objv_tracker, obj_name, y, dpp);
+  }
 
   virtual rgw_bucket& get_key() override { return next->get_key(); }
   virtual RGWBucketInfo& get_info() override { return next->get_info(); }

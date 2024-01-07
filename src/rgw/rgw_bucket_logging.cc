@@ -3,6 +3,8 @@
 
 #include "rgw_bucket_logging.h"
 #include "rgw_xml.h"
+#include "rgw_sal.h"
+#include <random>
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -15,6 +17,7 @@ bool rgw_bucket_logging::decode_xml(XMLObj* obj) {
     enabled = true;
     RGWXMLDecoder::decode_xml("TargetBucket", target_bucket, o, throw_if_missing);
     RGWXMLDecoder::decode_xml("TargetPrefix", target_prefix, o);
+    // TODO: decode grant
     uint32_t default_obj_roll_time{600};
     RGWXMLDecoder::decode_xml("ObjectRollTime", obj_roll_time, default_obj_roll_time, o);
     std::string default_type{"Standard"};
@@ -135,7 +138,6 @@ void rgw_bucket_logging::dump(Formatter *f) const {
   }
 }
 
-
 std::string rgw_bucket_logging::to_json_str() const {
   JSONFormatter f;
   f.open_object_section("bucketLoggingStatus");
@@ -144,5 +146,54 @@ std::string rgw_bucket_logging::to_json_str() const {
   std::stringstream ss;
   f.flush(ss);
   return ss.str();
+}
+
+template<size_t N>
+std::string unique_string() {
+  const char* possible_characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXY";
+  std::mt19937 engine;
+  std::uniform_int_distribution<> dist(0, 34);
+  std::string str;
+  str.reserve(N);
+  std::generate(str.begin(), str.end(), [&](){return possible_characters[dist(engine)];});
+  return str;
+}
+
+// Partitioned: [DestinationPrefix][SourceAccountId]/[SourceRegion]/[SourceBucket]/[YYYY]/[MM]/[DD]/[YYYY]-[MM]-[DD]-[hh]-[mm]-[ss]-[UniqueString]
+// Simple: [DestinationPrefix][YYYY]-[MM]-[DD]-[hh]-[mm]-[ss]-[UniqueString]
+// RGWPartitioned: [DestinationPrefix][RGWID][YYYY]-[MM]-[DD]-[hh]-[mm]-[ss]-[UniqueString]
+int log_record(rgw::sal::Driver* driver, const rgw_bucket_logging& configuration, const std::string& rgw_id,const std::string& tenant,
+  const bucket_logging_short_record& record, const DoutPrefixProvider *dpp, optional_yield y) {
+  std::unique_ptr<rgw::sal::Bucket> target_bucket;
+  auto ret = driver->load_bucket(dpp, rgw_bucket(tenant, configuration.target_bucket),
+                               &target_bucket, y);
+  if (ret < 0) {
+    ldpp_dout(dpp, 1) << "failed to get target bucket '" << configuration.target_bucket << "', ret = " << ret << dendl;
+    return ret;
+  }
+  std::string obj_name;
+  ret = target_bucket->get_logging_object_name(obj_name, y, dpp);
+  if (ret == 0) {
+    // get object and append log
+    // extract date from object name and check if object nees to be comitted
+  } else if (ret == -ENOENT) {
+    // create the temporary log object for the first time
+    obj_name.append(configuration.target_prefix)
+      .append(fmt::format("%Y-%m-%d-%H-%M-%S", ceph::coarse_mono_clock::now()))
+      .append(std::string{unique_string<16>()})
+      .append(rgw_id);
+    // TODO: support key formats
+    /*switch (configuration.obj_key_format) {
+      case BucketLoggingKeyFormat::RGWPartitioned:
+      case BucketLoggingKeyFormat::Simple:
+      case BucketLoggingKeyFormat::Partitioned:
+      case default:
+    }*/
+  } else {
+    ldpp_dout(dpp, 1) << "failed to get name of temporary log object of bucket '" << 
+      configuration.target_bucket << "', ret = " << ret << dendl;
+    return ret;
+  }
+  return 0;
 }
 
