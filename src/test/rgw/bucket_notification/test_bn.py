@@ -71,6 +71,10 @@ class HTTPPostHandler(http_server.BaseHTTPRequestHandler):
     def do_POST(self):
         """implementation of POST handler"""
         content_length = int(self.headers['Content-Length'])
+        if content_length == 0:
+            self.send_response(200)
+            self.end_headers()
+            return
         body = self.rfile.read(content_length)
         if self.server.cloudevents:
             event = from_http(self.headers, body) 
