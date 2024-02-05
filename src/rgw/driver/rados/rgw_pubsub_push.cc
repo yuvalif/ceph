@@ -108,9 +108,8 @@ public:
   }
 
   int is_alive(CephContext* cct, optional_yield y) override {
-    RGWPostHTTPData request(cct, "POST", endpoint, nullptr, verify_ssl);
-    request.append_header("Content-Length", "0");
-    return RGWHTTP::process(&request, y);
+    // TODO: implement
+    return 0;
   }
 
   std::string to_str() const override {

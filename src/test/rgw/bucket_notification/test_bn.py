@@ -3224,7 +3224,7 @@ def test_ps_s3_persistent_topic_stats():
     assert_equal(result[1], 0)
 
     # start an http server in a separate thread
-    http_server = StreamingHTTPServer(host, http_port, num_workers=10, delay=0.5)
+    http_server = StreamingHTTPServer(host, http_port, num_workers=10)
 
     print('wait for '+str(delay)+'sec for the messages...')
     time.sleep(delay)
