@@ -332,7 +332,7 @@ class CephFSTestCase(CephTestCase):
         else:
             log.info("No core_pattern directory set, nothing to clear (internal.coredump not enabled?)")
 
-    def _get_subtrees(self, status=None, rank=None, path=None):
+    def _get_subtrees(self, status=None, rank=None, path=None, auth=True):
         if path is None:
             path = "/"
         try:
@@ -343,7 +343,9 @@ class CephFSTestCase(CephTestCase):
                             subtrees = []
                             for r in self.fs.get_ranks(status=status):
                                 s = self.fs.rank_asok(["get", "subtrees"], status=status, rank=r['rank'])
-                                s = filter(lambda s: s['auth_first'] == r['rank'] and s['auth_second'] == -2, s)
+                                log.debug(f"{json.dumps(s, indent=2)}")
+                                if auth:
+                                    s = filter(lambda s: s['auth_first'] == r['rank'] and s['auth_second'] == -2, s)
                                 subtrees += s
                         else:
                             subtrees = self.fs.rank_asok(["get", "subtrees"], status=status, rank=rank)
@@ -387,12 +389,16 @@ class CephFSTestCase(CephTestCase):
         try:
             with contextutil.safe_while(sleep=5, tries=20) as proceed:
                 while proceed():
-                    subtrees = self._get_subtrees(status=status, rank=rank, path=path)
-                    subtrees = list(filter(lambda s: s['distributed_ephemeral_pin'] == True and
+                    subtrees = self._get_subtrees(status=status, rank=rank, path=path, auth=False)
+                    dist = list(filter(lambda s: s['distributed_ephemeral_pin'] == True and
                                                      s['auth_first'] == s['export_pin_target'],
                                            subtrees))
-                    log.info(f"len={len(subtrees)} {subtrees}")
+                    log.info(f"len={len(dist)}\n{json.dumps(dist, indent=2)}")
+
                     if len(subtrees) >= count:
+                        if len(subtrees) > len(dist):
+                            # partial migration
+                            continue
                         return subtrees
         except contextutil.MaxWhileTries as e:
             raise RuntimeError("rank {0} failed to reach desired subtree state".format(rank)) from e
