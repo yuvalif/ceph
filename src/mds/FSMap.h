@@ -21,6 +21,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include <errno.h>
 
@@ -450,9 +451,18 @@ public:
   template<typename T>
   void modify_filesystem(fs_cluster_id_t fscid, T&& fn)
   {
-    auto& fs = filesystems.at(fscid);
-    fn(fs);
-    fs->mds_map.epoch = epoch;
+    auto fs = filesystems.at(fscid);
+    bool did_update = true;
+
+    if constexpr (std::is_convertible_v<std::invoke_result_t<T, decltype(fs)>, bool>) {
+      did_update = fn(fs);
+    } else {
+      fn(fs);
+    }
+    
+    if (did_update) {
+      fs->mds_map.epoch = epoch;
+    }
   }
 
   /**

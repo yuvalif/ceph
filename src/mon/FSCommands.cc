@@ -659,7 +659,7 @@ public:
         }
       }
 
-      auto f = [allow](auto& fs) {
+      auto f = [allow](auto&& fs) {
         if (allow) {
           fs->mds_map.set_standby_replay_allowed();
         } else {
