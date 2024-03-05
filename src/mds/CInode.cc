@@ -2210,13 +2210,6 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
   case CEPH_LOCK_IPOLICY:
     encode_lock_ipolicy(bl);
     break;
-
-  case CEPH_LOCK_IQUIESCE: {
-    ENCODE_START(1, 1, bl);
-    /* skeleton */
-    ENCODE_FINISH(bl);
-    break;
-  }
   
   default:
     ceph_abort();
@@ -4309,7 +4302,6 @@ void CInode::_encode_locks_full(bufferlist& bl)
   encode(flocklock, bl);
   encode(policylock, bl);
   encode(loner_cap, bl);
-  encode(quiescelock, bl);
 }
 void CInode::_decode_locks_full(bufferlist::const_iterator& p)
 {
@@ -4326,7 +4318,6 @@ void CInode::_decode_locks_full(bufferlist::const_iterator& p)
   decode(loner_cap, p);
   set_loner_cap(loner_cap);
   want_loner_cap = loner_cap;  // for now, we'll eval() shortly.
-  decode(quiescelock, p);
 }
 
 void CInode::_encode_locks_state_for_replica(bufferlist& bl, bool need_recover)
@@ -4342,7 +4333,6 @@ void CInode::_encode_locks_state_for_replica(bufferlist& bl, bool need_recover)
   flocklock.encode_state_for_replica(bl);
   policylock.encode_state_for_replica(bl);
   encode(need_recover, bl);
-  quiescelock.encode_state_for_replica(bl);
   ENCODE_FINISH(bl);
 }
 
@@ -4358,12 +4348,11 @@ void CInode::_encode_locks_state_for_rejoin(bufferlist& bl, int rep)
   snaplock.encode_state_for_replica(bl);
   flocklock.encode_state_for_replica(bl);
   policylock.encode_state_for_replica(bl);
-  quiescelock.encode_state_for_replica(bl);
 }
 
 void CInode::_decode_locks_state_for_replica(bufferlist::const_iterator& p, bool is_new)
 {
-  DECODE_START(2, p);
+  DECODE_START(1, p);
   authlock.decode_state(p, is_new);
   linklock.decode_state(p, is_new);
   dirfragtreelock.decode_state(p, is_new);
@@ -4376,10 +4365,6 @@ void CInode::_decode_locks_state_for_replica(bufferlist::const_iterator& p, bool
 
   bool need_recover;
   decode(need_recover, p);
-
-  if (struct_v >= 2) {
-    quiescelock.decode_state(p, is_new);
-  }
 
   if (need_recover && is_new) {
     // Auth mds replicated this inode while it's recovering. Auth mds may take xlock on the lock
@@ -4408,7 +4393,6 @@ void CInode::_decode_locks_rejoin(bufferlist::const_iterator& p, MDSContext::vec
   snaplock.decode_state_rejoin(p, waiters, survivor);
   flocklock.decode_state_rejoin(p, waiters, survivor);
   policylock.decode_state_rejoin(p, waiters, survivor);
-  quiescelock.decode_state_rejoin(p, waiters, survivor);
 
   if (!dirfragtreelock.is_stable() && !dirfragtreelock.is_wrlocked())
     eval_locks.push_back(&dirfragtreelock);
