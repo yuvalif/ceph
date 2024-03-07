@@ -1343,6 +1343,7 @@ public:
     return stats.omap_tree_depth;
   }
 
+private:
   /// Update lru for access to ref
   void touch_extent(
       CachedExtent &ext,
@@ -1358,7 +1359,6 @@ public:
     }
   }
 
-private:
   ExtentPlacementManager& epm;
   RootBlockRef root;               ///< ref to current root
   ExtentIndex extents;             ///< set of live extents
