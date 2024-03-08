@@ -1070,6 +1070,8 @@ class CallHomeAgent(MgrModule):
                                 self.send_diagnostics(operation_key, commands_file, sos_files_pattern)
                                 self.log.info(f'Operations ({operation_key}): Completed <{operation["type"]}> operation')
                                 operation["status"] = OPERATION_STATUS_COMPLETE
+                                operation["progress"] = 100
+                                operation["description"] = OPERATION_STATUS_COMPLETE
                             except Exception as ex:
                                 self.log.error(f'Operations ({operation_key}): Error processing <{operation["type"]}> operation: {ex}')
                                 operation["status"] = OPERATION_STATUS_ERROR
@@ -1165,9 +1167,10 @@ class CallHomeAgent(MgrModule):
         # Send commands file:
         self.upload_file(op_key, cmd_file_name)
 
-        # Send sos file splitted:
-        sos_file_name = f'{sos_files_pattern[:-2]}.xz'
-        self.upload_file(op_key, sos_file_name, sos_files_pattern)
+        # Send sos file splitted when we have files
+        if sos_files_pattern:
+            sos_file_name = f'{sos_files_pattern[:-2]}.xz'
+            self.upload_file(op_key, sos_file_name, sos_files_pattern)
 
     def send_operation_report(self, key:str) -> None:
         try:
