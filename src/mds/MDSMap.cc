@@ -766,7 +766,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
   encode(data_pools, bl);
   encode(cas_pool, bl);
 
-  __u16 ev = 17;
+  __u16 ev = 18;
   encode(ev, bl);
   encode(compat, bl);
   encode(metadata_pool, bl);
@@ -794,6 +794,12 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
   }
   encode(required_client_features, bl);
   encode(bal_rank_mask, bl);
+
+  // this is a stub for the future to keep the mdsmap versioning
+  // aligned with the upstream. As of 7.1, this value is unused
+  uint64_t const future_max_xattr_size = (1<<16);
+  encode(future_max_xattr_size, bl);
+
   ENCODE_FINISH(bl);
 }
 
@@ -943,6 +949,13 @@ void MDSMap::decode(bufferlist::const_iterator& p)
 
   if (ev >= 17) {
     decode(bal_rank_mask, p);
+  }
+
+  if (ev >= 18) {
+    // this is a stub for the future to keep the mdsmap versioning
+    // aligned with the upstream. As of 7.1, this value is unused
+    uint64_t future_max_xattr_size;
+    decode(future_max_xattr_size, p);
   }
 
   /* All MDS since at least v14.0.0 understand INLINE */
