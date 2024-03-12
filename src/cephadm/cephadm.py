@@ -9987,17 +9987,6 @@ def command_sos(ctx: CephadmContext):
     The original compressed file can be rebuild using:
     # cat /var/log/ceph/<cluster_fsid>/sosreport* > /tmp/sosreport_case_<xx>.tar.xz
     """
-
-    def execute(cmd_list) -> Tuple[bool, str]:
-        success = True
-        out, err, code = call(ctx, cmd_list, verbosity=CallVerbosity.DEBUG)
-        if err or code:
-            logger.error(f'Failed to execute command <{cmd_list}>:\n{err}')
-            success = False
-        else:
-            logger.debug(f'Executed succesfully command <{cmd_list}>')
-        return success, out
-
     def remove_files(folder: str, pattern: str) -> None:
         file_path = ""
         try:
@@ -10018,9 +10007,14 @@ def command_sos(ctx: CephadmContext):
 
         # sos report execution
         cmd_sos = ['sos'] + ctx.parameters
-        success, out = execute(cmd_sos)
-        if not success:
-            raise Exception(f'Error executing command <{cmd_sos}>: {out}')
+        out, err, code = call(ctx, cmd_sos, verbosity=CallVerbosity.DEBUG)
+        if (err or code):
+            if out:
+                # even with errors a sos file can be generated
+                # inform about the issue and continue trying to get the file
+                print(f'Issue executing <{cmd_sos}>: {code}:{err}')
+            else:
+                raise Exception(f'Error executing command <{cmd_sos}>:{code}-{err}')
 
         file_path_pattern = r'Your sosreport has been generated and saved in:\s+(\S+)'
         match = re.search(file_path_pattern, out)
@@ -10044,8 +10038,8 @@ def command_sos(ctx: CephadmContext):
         # split sos report file in <sos_files_number> parts (10 by default)
         os.chdir(sos_report_parts_folder)
         split_cmd = ['split', '-n', f'{ctx.sos_files_number}', sos_file, prefix, '--additional-suffix', suffix]
-        success, out = execute(split_cmd)
-        if not success:
+        out, err, code = call(ctx, split_cmd, verbosity=CallVerbosity.DEBUG)
+        if err or code:
             raise Exception(f'Error splitting sos report file: <{out}>')
 
         # remove source sos report (because we already have the

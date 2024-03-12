@@ -287,10 +287,23 @@ def collect_sos_report(mgr: Any, operation_key: str) -> str:
     matches = re.findall(pattern, sos_cmd_execution.result[0])
     if matches:
         mgr.log.info(f"Operations ({operation_key}): sos command files pattern is: {matches[0]}")
-        return matches[0]
+        result = matches[0]
     else:
         mgr.log.error(f"Operations ({operation_key}): sos report files pattern not found in: {sos_cmd_execution.result[0]}")
-        return ""
+        result = ""
+
+    # If there is any issue executing the command, the output will be like:
+    # ['Issue executing <['sos', 'report', '--batch', '--quiet', '--case-id', 'TS015034298', '-p', 'container']>: 0:[plugin:ceph_mon] Failed to find ceph version, command collection will be limited
+    #
+    # New sos report files can be found in /var/log/ceph/<fsid>/sosreport_case_TS015034298_1709809018376_*']
+    # in this case, we leave a warning in the log about the issue
+    pattern = r'^Issue executing.*'
+    matches = re.findall(pattern, sos_cmd_execution.result[0])
+    if matches:
+         mgr.log.warn(f"Operations ({operation_key}): review sos command execution in {best_mon}: {matches[0]}")
+
+    return result
+
 
 def notProcessed(item: dict) -> bool:
     """
