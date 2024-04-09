@@ -138,19 +138,22 @@ class HTTPPostHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         """implementation of POST handler"""
         content_length = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_length)
-        if self.server.cloudevents:
-            event = from_http(self.headers, body) 
-            record = json.loads(body)['Records'][0]
-            assert_equal(event['specversion'], '1.0')
-            assert_equal(event['id'], record['responseElements']['x-amz-request-id'] + '.' + record['responseElements']['x-amz-id-2'])
-            assert_equal(event['source'], 'ceph:s3.' + record['awsRegion'] + '.' + record['s3']['bucket']['name'])
-            assert_equal(event['type'], 'com.amazonaws.' + record['eventName'])
-            assert_equal(event['datacontenttype'], 'application/json') 
-            assert_equal(event['subject'], record['s3']['object']['key'])
-            assert_equal(parser.parse(event['time']), parser.parse(record['eventTime']))
-        log.info('HTTP Server received event: %s', str(body))
-        self.server.append(json.loads(body))
+        if content_length > 0:
+            body = self.rfile.read(content_length)
+            if self.server.cloudevents:
+                event = from_http(self.headers, body) 
+                record = json.loads(body)['Records'][0]
+                assert_equal(event['specversion'], '1.0')
+                assert_equal(event['id'], record['responseElements']['x-amz-request-id'] + '.' + record['responseElements']['x-amz-id-2'])
+                assert_equal(event['source'], 'ceph:s3.' + record['awsRegion'] + '.' + record['s3']['bucket']['name'])
+                assert_equal(event['type'], 'com.amazonaws.' + record['eventName'])
+                assert_equal(event['datacontenttype'], 'application/json') 
+                assert_equal(event['subject'], record['s3']['object']['key'])
+                assert_equal(parser.parse(event['time']), parser.parse(record['eventTime']))
+            log.info('HTTP Server received event: %s', str(body))
+            self.server.append(json.loads(body))
+        else:
+            log.info('HTTP Server received empty event')
         if self.headers.get('Expect') == '100-continue':
             self.send_response(100)
         else:
@@ -181,7 +184,17 @@ class HTTPServerWithEvents(ThreadingHTTPServer):
             log.error('http server on %s failed to start. closing...', str(self.addr))
             self.close()
             assert False
-
+        result = requests.post('http://'+self.addr[0]+':'+str(self.addr[1]), data='')
+        retries = 0
+        while not result.ok and retries < 5:
+            retries += 1
+            time.sleep(5)
+            result = requests.post('http://'+self.addr[0]+':'+str(self.addr[1]), data='')
+            log.warning('test posting to http server on %s result with %s', str(self.addr), str(result))
+        if not result.ok:
+            log.error('failed posting to http server on %s. closing...', str(self.addr))
+            self.close()
+            assert False
 
     def run(self):
         log.info('http server started on %s', str(self.addr))
@@ -3072,6 +3085,7 @@ def wait_for_queue_to_drain(topic_name):
     while entries > 0:
         result = admin(['topic', 'stats', '--topic', topic_name], get_config_cluster())
         assert_equal(result[1], 0)
+        log.info('queue %s topic stats: %s', topic_name, result[0])
         parsed_result = json.loads(result[0])
         entries = parsed_result['Topic Stats']['Entries']
         retries += 1
