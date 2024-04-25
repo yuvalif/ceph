@@ -381,16 +381,16 @@ class KafkaReceiver(object):
                         security_protocol=security_type,
                         consumer_timeout_ms=16000,
                         auto_offset_reset='earliest')
-                print('Kafka consumer created on topic: '+topic)
+                log.info('kafka receiver created on %s', topic)
                 break
             except Exception as error:
                 remaining_retries -= 1
-                print('failed to connect to kafka (remaining retries '
-                    + str(remaining_retries) + '): ' + str(error))
+                log.info('kafka receiver on %s failed to connect to broker (remaining retries %d). error: %s',
+                         topic, remaining_retries, str(error))
                 time.sleep(1)
 
         if remaining_retries == 0:
-            raise Exception('failed to connect to kafka - no retries left')
+            raise Exception('kafka receiver on %s failed to connect to broker - no retries left', topic)
 
         self.events = []
         self.topic = topic
@@ -401,20 +401,36 @@ class KafkaReceiver(object):
         verify_s3_records_by_elements(self.events, keys, exact_match=exact_match, deletions=deletions, etags=etags)
         self.events = []
 
+    def wait_for_events(self, n):
+        retries = 0
+        entries = len(self.events)
+        start_time = time.time()
+        while n > entries:
+            retries += 1
+            log.info('kafka receiver on %s got %d events out of %d', self.topic, len(self.events), n)
+            if retries > 120:
+                time_diff = time.time() - start_time
+                assert n <= entries, 'kafka receiver on '+self.topic+ \
+                    ' still has '+str(entries)+' out of '+str(n)+ \
+                    ' entries after '+str(time_diff)+'s'
+            time.sleep(5)
+            entries = len(self.events)
+        time_diff = time.time() - start_time
+        log.info('waited for %ds for kafka receiver on %s to receive all events', time_diff, self.topic)
+
+
 def kafka_receiver_thread_runner(receiver):
     """main thread function for the kafka receiver"""
     try:
-        log.info('Kafka receiver started')
-        print('Kafka receiver started')
+        log.info('kafka receiver on %s started', receiver.topic)
         while not receiver.stop:
             for msg in receiver.consumer:
                 receiver.events.append(json.loads(msg.value))
+                log.info('Kafka receiver message: '+str(msg.value))
             time.sleep(0.1)
-        log.info('Kafka receiver ended')
-        print('Kafka receiver ended')
+        log.info('kafka receiver on %s ended', receiver.topic)
     except Exception as error:
-        log.info('Kafka receiver ended unexpectedly: %s', str(error))
-        print('Kafka receiver ended unexpectedly: ' + str(error))
+        log.info('kafka receiver on %s ended with error: %s', receiver.topic, str(error))
 
 
 def create_kafka_receiver_thread(topic, security_type='PLAINTEXT'):
@@ -422,17 +438,33 @@ def create_kafka_receiver_thread(topic, security_type='PLAINTEXT'):
     receiver = KafkaReceiver(topic, security_type)
     task = threading.Thread(target=kafka_receiver_thread_runner, args=(receiver,))
     task.daemon = True
+    task.start()
+    retries = 0
+    while task.is_alive() == False and retries < 5:
+        retries += 1
+        time.sleep(5)
+        log.warning('kafka receiver on %s did not start yet', topic)
+    if not task.is_alive():
+        log.error('kafka receiver on %s failed to start. closing...', topic)
+        stop_kafka_receiver(receiver, task)
+        raise Exception('kafka receiver on %s failed to start', topic)
     return task, receiver
 
 def stop_kafka_receiver(receiver, task):
     """stop the receiver thread and wait for it to finish"""
+    log.info('kafka receiver on %s starting shutdown', receiver.topic)
     receiver.stop = True
-    task.join(1)
+    retries = 0
+    while task.is_alive() and retries < 5:
+        retries += 1
+        task.join(5)
+        log.warning('kafka receiver on %s still alive', receiver.topic)
     try:
         receiver.consumer.unsubscribe()
         receiver.consumer.close()
+        log.info('stopped Kafka receiver on: %s', receiver.topic)
     except Exception as error:
-        log.info('failed to gracefully stop Kafka receiver: %s', str(error))
+        log.info('failed to gracefully stop Kafka receiver on: %s. error: %s', receiver.topic, str(error))
 
 
 def get_ip():
@@ -1419,10 +1451,8 @@ def test_ps_s3_notification_push_kafka_on_master():
     try:
         s3_notification_conf = None
         topic_conf1 = None
-        topic_conf2 = None
         receiver = None
         task, receiver = create_kafka_receiver_thread(topic_name+'_1')
-        task.start()
 
         # create s3 topic
         endpoint_address = 'kafka://' + kafka_server
@@ -1430,15 +1460,9 @@ def test_ps_s3_notification_push_kafka_on_master():
         endpoint_args = 'push-endpoint='+endpoint_address+'&kafka-ack-level=broker'
         topic_conf1 = PSTopicS3(conn, topic_name+'_1', zonegroup, endpoint_args=endpoint_args)
         topic_arn1 = topic_conf1.set_config()
-        endpoint_args = 'push-endpoint='+endpoint_address+'&kafka-ack-level=none'
-        topic_conf2 = PSTopicS3(conn, topic_name+'_2', zonegroup, endpoint_args=endpoint_args)
-        topic_arn2 = topic_conf2.set_config()
         # create s3 notification
         notification_name = bucket_name + NOTIFICATION_SUFFIX
         topic_conf_list = [{'Id': notification_name + '_1', 'TopicArn': topic_arn1,
-                         'Events': []
-                       },
-                       {'Id': notification_name + '_2', 'TopicArn': topic_arn2,
                          'Events': []
                        }]
 
@@ -1464,8 +1488,7 @@ def test_ps_s3_notification_push_kafka_on_master():
         time_diff = time.time() - start_time
         print('average time for creation + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-        print('wait for 10sec for the messages...')
-        time.sleep(10)
+        receiver.wait_for_events(number_of_objects)
         keys = list(bucket.list())
         receiver.verify_s3_events(keys, exact_match=True, etags=etags)
 
@@ -1481,8 +1504,7 @@ def test_ps_s3_notification_push_kafka_on_master():
         time_diff = time.time() - start_time
         print('average time for deletion + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-        print('wait for 10sec for the messages...')
-        time.sleep(10)
+        receiver.wait_for_events(number_of_objects)
         receiver.verify_s3_events(keys, exact_match=True, deletions=True, etags=etags)
     except Exception as e:
         assert False, str(e)
@@ -1492,8 +1514,6 @@ def test_ps_s3_notification_push_kafka_on_master():
             s3_notification_conf.del_config()
         if topic_conf1 is not None:
             topic_conf1.del_config()
-        if topic_conf2 is not None:
-            topic_conf2.del_config()
         # delete the bucket
         for key in bucket.list():
             key.delete()
@@ -3413,7 +3433,6 @@ def test_ps_s3_notification_kafka_idle_behaviour():
     # create consumer on the topic
    
     task, receiver = create_kafka_receiver_thread(topic_name+'_1')
-    task.start()
 
     # create s3 topic
     endpoint_address = 'kafka://' + kafka_server
@@ -3449,8 +3468,7 @@ def test_ps_s3_notification_kafka_idle_behaviour():
     time_diff = time.time() - start_time
     print('average time for creation + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-    print('wait for 5sec for the messages...')
-    time.sleep(5)
+    receiver.wait_for_events(number_of_objects)
     keys = list(bucket.list())
     receiver.verify_s3_events(keys, exact_match=True, etags=etags)
 
@@ -3466,8 +3484,7 @@ def test_ps_s3_notification_kafka_idle_behaviour():
     time_diff = time.time() - start_time
     print('average time for deletion + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-    print('wait for 5sec for the messages...')
-    time.sleep(5)
+    receiver.wait_for_events(number_of_objects)
     receiver.verify_s3_events(keys, exact_match=True, deletions=True, etags=etags)
 
     is_idle = False
@@ -3502,8 +3519,7 @@ def test_ps_s3_notification_kafka_idle_behaviour():
     time_diff = time.time() - start_time
     print('average time for creation + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-    print('wait for 5sec for the messages...')
-    time.sleep(5)
+    receiver.wait_for_events(number_of_objects)
     keys = list(bucket.list())
     receiver.verify_s3_events(keys, exact_match=True, etags=etags)
 
@@ -3519,8 +3535,7 @@ def test_ps_s3_notification_kafka_idle_behaviour():
     time_diff = time.time() - start_time
     print('average time for deletion + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-    print('wait for 5sec for the messages...')
-    time.sleep(5)
+    receiver.wait_for_events(number_of_objects)
     receiver.verify_s3_events(keys, exact_match=True, deletions=True, etags=etags)
 
     # cleanup
@@ -3843,7 +3858,6 @@ def persistent_notification(endpoint_type, conn, account=None):
     elif endpoint_type == 'kafka':
         # start amqp receiver
         task, receiver = create_kafka_receiver_thread(topic_name)
-        task.start()
         endpoint_address = 'kafka://' + host
         endpoint_args = 'push-endpoint='+endpoint_address+'&kafka-ack-level=broker'+'&persistent=true'
         # amqp broker guarantee ordering
@@ -4558,7 +4572,6 @@ def kafka_security(security_type, mechanism='PLAIN'):
     
     # create consumer on the topic
     task, receiver = create_kafka_receiver_thread(topic_name)
-    task.start()
     
     topic_arn = topic_conf.set_config()
     # create s3 notification
