@@ -250,7 +250,7 @@ def task(ctx,config):
     tasks:
     - kafka:
         client.0:
-          kafka_version: 2.6.0
+          kafka_version: 3.7.0
     - notification_tests:
         client.0:
           extra_attr: ["kafka_test"]
