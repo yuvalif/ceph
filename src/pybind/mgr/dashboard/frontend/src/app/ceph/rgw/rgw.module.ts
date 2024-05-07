@@ -47,6 +47,7 @@ import { RgwSyncDataInfoComponent } from './rgw-sync-data-info/rgw-sync-data-inf
 import { BucketTagModalComponent } from './bucket-tag-modal/bucket-tag-modal.component';
 import { RgwConfigurationPageComponent } from './rgw-configuration-page/rgw-configuration-page.component';
 import { RgwConfigDetailsComponent } from './rgw-config-details/rgw-config-details.component';
+import { RgwMultisiteWizardComponent } from './rgw-multisite-wizard/rgw-multisite-wizard.component';
 
 @NgModule({
   imports: [
@@ -106,7 +107,8 @@ import { RgwConfigDetailsComponent } from './rgw-config-details/rgw-config-detai
     RgwSyncDataInfoComponent,
     BucketTagModalComponent,
     RgwConfigDetailsComponent,
-    RgwConfigurationPageComponent
+    RgwConfigurationPageComponent,
+    RgwMultisiteWizardComponent
   ]
 })
 export class RgwModule {}
@@ -196,8 +198,16 @@ const routes: Routes = [
   },
   {
     path: 'multisite',
+    component: RgwMultisiteDetailsComponent,
     data: { breadcrumbs: 'Multi-site' },
-    children: [{ path: '', component: RgwMultisiteDetailsComponent }]
+    children: [
+      { path: '', component: RgwMultisiteDetailsComponent },
+      {
+        path: 'setup-multisite-replication',
+        component: RgwMultisiteWizardComponent,
+        outlet: 'modal'
+      }
+    ]
   },
   {
     path: 'configuration',
