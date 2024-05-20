@@ -565,14 +565,18 @@ static int remove_expired_obj(const DoutPrefixProvider* dpp,
                               lc_op_ctx& oc,
                               bool remove_indeed,
                               const rgw::notify::EventTypeList& event_types) {
+  int ret{0};
   auto& driver = oc.driver;
   auto& bucket_info = oc.bucket->get_info();
   auto& o = oc.o;
   auto obj_key = o.key;
   auto& meta = o.meta;
-  int ret;
   auto version_id = obj_key.instance; // deep copy, so not cleared below
+
+  /* used only by notifications */
   std::unique_ptr<rgw::sal::Notification> notify;
+  RGWObjState* obj_state{nullptr};
+  string etag;
 
   /* per discussion w/Daniel, Casey,and Eric, we *do need*
    * a new sal object handle, based on the following decision
@@ -583,17 +587,22 @@ static int remove_expired_obj(const DoutPrefixProvider* dpp,
   } else if (obj_key.instance.empty()) {
     obj_key.instance = "null";
   }
-  auto obj = oc.bucket->get_object(obj_key);
 
-  RGWObjState* obj_state{nullptr};
-  string etag;
+  auto obj = oc.bucket->get_object(obj_key);
   ret = obj->get_obj_state(dpp, &obj_state, null_yield, true);
   if (ret < 0) {
+    ldpp_dout(oc.dpp, 0) <<
+      fmt::format("ERROR: get_obj_state() failed in {} for object k={} error r={}",
+		  __func__, oc.o.key.to_string(), ret) << dendl;
     return ret;
   }
-  auto iter = obj_state->attrset.find(RGW_ATTR_ETAG);
-  if (iter != obj_state->attrset.end()) {
-    etag = rgw_bl_str(iter->second);
+
+  auto have_notify = !event_types.empty();
+  if (have_notify) {
+    auto iter = obj_state->attrset.find(RGW_ATTR_ETAG);
+    if (iter != obj_state->attrset.end()) {
+      etag = rgw_bl_str(iter->second);
+    }
   }
 
   std::unique_ptr<rgw::sal::Object::DeleteOp> del_op
@@ -605,18 +614,20 @@ static int remove_expired_obj(const DoutPrefixProvider* dpp,
   del_op->params.bucket_owner = bucket_info.owner;
   del_op->params.unmod_since = meta.mtime;
 
-  // notification supported only for RADOS driver for now
-  notify = driver->get_notification(
-      dpp, obj.get(), nullptr, event_types, oc.bucket, lc_id,
-      const_cast<std::string&>(oc.bucket->get_tenant()), lc_req_id, null_yield);
+  if (have_notify) {
+    // notification supported only for RADOS driver for now
+    notify =
+      driver->get_notification(
+          dpp, obj.get(), nullptr, event_types, oc.bucket, lc_id,
+	  const_cast<std::string&>(oc.bucket->get_tenant()), lc_req_id, null_yield);
 
-  ret = notify->publish_reserve(dpp, nullptr);
-  if ( ret < 0) {
-    ldpp_dout(dpp, 1)
-      << "ERROR: notify reservation failed, deferring delete of object k="
-      << o.key
-      << dendl;
-    return ret;
+    ret = notify->publish_reserve(dpp, nullptr);
+    if ( ret < 0) {
+      ldpp_dout(dpp, 1)
+	<< fmt::format("ERROR: {} notify reservation failed, deferring delete of object k=",
+		       __func__, o.key.to_string()) << dendl;
+      return ret;
+    }
   }
 
   uint32_t flags = (!remove_indeed || !zonegroup_lc_check(dpp, oc.driver->get_zone()))
@@ -626,13 +637,17 @@ static int remove_expired_obj(const DoutPrefixProvider* dpp,
     ldpp_dout(dpp, 1) <<
       fmt::format("ERROR: {} failed, with error: {}", __func__, ret) << dendl;
   } else {
-    // send request to notification manager
-    int publish_ret = notify->publish_commit(dpp, obj_state->size,
-				 ceph::real_clock::now(),
-				 etag,
-				 version_id);
-    if (publish_ret < 0) {
-      ldpp_dout(dpp, 5) << "WARNING: notify publish_commit failed, with error: " << publish_ret << dendl;
+    if (have_notify) {
+      // send request to notification manager
+      int publish_ret = notify->publish_commit(dpp, obj_state->size,
+					       ceph::real_clock::now(),
+					       etag,
+					       version_id);
+      if (publish_ret < 0) {
+	ldpp_dout(dpp, 5) <<
+	  fmt::format("WARNING: {} notify publish_commit failed, with error: {} ",
+		      __func__, publish_ret) << dendl;
+      }
     }
   }
 
@@ -1383,22 +1398,19 @@ public:
      */
     if (! oc.bucket->versioned()) {
       ret =
-          remove_expired_obj(oc.dpp, oc, true, {rgw::notify::ObjectTransition});
+	remove_expired_obj(oc.dpp, oc, true, {/* no delete notify expected */});
       ldpp_dout(oc.dpp, 20) << "delete_tier_obj Object(key:" << oc.o.key
                             << ") not versioned flags: " << oc.o.flags << dendl;
     } else {
       /* versioned */
       if (oc.o.is_current() && !oc.o.is_delete_marker()) {
-        ret = remove_expired_obj(oc.dpp, oc, false,
-                                 {rgw::notify::ObjectTransitionCurrent,
-                                  rgw::notify::LifecycleTransition});
+        ret = remove_expired_obj(oc.dpp, oc, false, {/* no delete notify expected */});
         ldpp_dout(oc.dpp, 20) << "delete_tier_obj Object(key:" << oc.o.key
                               << ") current & not delete_marker"
                               << " versioned_epoch:  " << oc.o.versioned_epoch
                               << "flags: " << oc.o.flags << dendl;
       } else {
-        ret = remove_expired_obj(oc.dpp, oc, true,
-                                 {rgw::notify::ObjectTransitionNoncurrent});
+        ret = remove_expired_obj(oc.dpp, oc, true, {/* no delete notify expected */});
         ldpp_dout(oc.dpp, 20)
             << "delete_tier_obj Object(key:" << oc.o.key << ") not current "
             << "versioned_epoch:  " << oc.o.versioned_epoch
