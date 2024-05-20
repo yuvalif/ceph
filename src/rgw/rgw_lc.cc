@@ -1270,7 +1270,8 @@ public:
   int process(lc_op_ctx& oc) override {
     auto& o = oc.o;
     int r = remove_expired_obj(oc.dpp, oc, true,
-                               {rgw::notify::ObjectExpirationNoncurrent});
+                               {rgw::notify::LifecycleExpirationDelete,
+				rgw::notify::ObjectExpirationNoncurrent});
     if (r < 0) {
       ldpp_dout(oc.dpp, 0) << "ERROR: remove_expired_obj (non-current expiration) " 
 			   << oc.bucket << ":" << o.key
