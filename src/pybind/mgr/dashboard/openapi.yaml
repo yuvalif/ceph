@@ -11597,7 +11597,6 @@ paths:
               - realm_token
               - zone_name
               - port
-              - placement_spec
               type: object
       responses:
         '201':
