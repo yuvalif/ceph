@@ -408,6 +408,16 @@ META_PREFIX = 'x-amz-meta-'
 
 kafka_server = 'localhost'
 
+def check_kafka_broker(port):
+    str_port = str(port)
+    cmd = 'netstat -tlnnp | grep java | grep '+str_port
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    out = proc.communicate()[0]
+    assert len(out) > 0, "kafka broker NOT listening on port "+str_port
+    log.info("kafka broker listening on port "+str_port)
+    log.info(out.decode('utf-8'))
+
+
 class KafkaReceiver(object):
     """class for receiving and storing messages on a topic from the kafka broker"""
     def __init__(self, topic, security_type):
@@ -424,23 +434,28 @@ class KafkaReceiver(object):
                         security_protocol=security_type,
                         consumer_timeout_ms=16000,
                         auto_offset_reset='earliest')
-                print('Kafka consumer created on topic: '+topic)
+                log.info('kafka consumer created on topic %s', topic)
                 break
             except Exception as error:
                 remaining_retries -= 1
-                print('failed to connect to kafka (remaining retries '
-                    + str(remaining_retries) + '): ' + str(error))
+                log.info('kafka consumer on topic %s failed to connect to broker (remaining retries %d): %s',
+                         topic,
+                         remaining_retries, 
+                         str(error))
                 time.sleep(1)
 
         if remaining_retries == 0:
-            raise Exception('failed to connect to kafka - no retries left')
+            raise Exception('kafka consumer on topic: '+topic+' failed to connect to broker - no retries left')
 
         self.events = []
         self.topic = topic
         self.stop = False
+        self.port = port
+        self.pinged = False
 
     def verify_s3_events(self, keys, exact_match=False, deletions=False, expected_sizes={}, etags=[]):
         """verify stored s3 records agains a list of keys"""
+        check_kafka_broker(self.port)
         verify_s3_records_by_elements(self.events, keys, exact_match=exact_match, deletions=deletions, expected_sizes=expected_sizes, etags=etags)
         self.events = []
 
@@ -455,17 +470,19 @@ class KafkaReceiver(object):
 def kafka_receiver_thread_runner(receiver):
     """main thread function for the kafka receiver"""
     try:
-        log.info('Kafka receiver started')
-        print('Kafka receiver started')
+        log.info('Kafka consumer on topic: %s started', receiver.topic)
         while not receiver.stop:
             for msg in receiver.consumer:
-                receiver.events.append(json.loads(msg.value))
-            time.sleep(0.1)
-        log.info('Kafka receiver ended')
-        print('Kafka receiver ended')
+                log.info('kafka consumer on topic: %s received event: %s', receiver.topic, msg.value.decode('utf-8'))
+                if msg.value == b'ping':
+                    receiver.pinged = True
+                else:
+                    receiver.events.append(json.loads(msg.value))
+            log.info('kafka consumer on topic: %s timeedout. will retry', receiver.topic)
+            time.sleep(1)
+        log.info('Kafka consumer on topic: %s ended', receiver.topic)
     except Exception as error:
-        log.info('Kafka receiver ended unexpectedly: %s', str(error))
-        print('Kafka receiver ended unexpectedly: ' + str(error))
+        log.info('Kafka consumer on topic: %s ended unexpectedly: %s', receiver.topic, str(error))
 
 
 def create_kafka_receiver_thread(topic, security_type='PLAINTEXT'):
@@ -473,6 +490,25 @@ def create_kafka_receiver_thread(topic, security_type='PLAINTEXT'):
     receiver = KafkaReceiver(topic, security_type)
     task = threading.Thread(target=kafka_receiver_thread_runner, args=(receiver,))
     task.daemon = True
+    task.start()
+    retries = 0
+    while not task.is_alive() and retries < 5:
+        retries += 1
+        time.sleep(5)
+        log.warning('kafka consumer on topic: %s did not start yet', receiver.topic)
+    assert task.is_alive(), 'kafka consumer on topic: '+receiver.topic+' failed to start. closing...'
+    from kafka import KafkaProducer
+    producer = KafkaProducer(bootstrap_servers=kafka_server+':'+str(receiver.port))
+    producer.send(topic, value=b'ping')
+    producer.flush(5)
+    log.info('pinged Kafka consumer on topic: %s', receiver.topic)
+    retries = 0
+    while not receiver.pinged and retries < 5:
+        retries += 1
+        time.sleep(5)
+        log.warning('kafka consumer on topic: %s did not received ping yet', receiver.topic)
+    producer.close()
+    assert receiver.pinged, 'kafka consumer on topic: '+receiver.topic+' did not receive ping'
     return task, receiver
 
 def stop_kafka_receiver(receiver, task):
@@ -482,8 +518,11 @@ def stop_kafka_receiver(receiver, task):
     try:
         receiver.consumer.unsubscribe()
         receiver.consumer.close()
+        log.info('Kafka receiver on topic: %s stopped', receiver.topic)
     except Exception as error:
-        log.info('failed to gracefully stop Kafka receiver: %s', str(error))
+        log.info('failed to gracefully stop Kafka receiver on topic: %s. error: %s',
+                 receiver.topic,
+                 str(error))
 
 
 def get_ip():
@@ -1321,9 +1360,8 @@ def notification_push(endpoint_type, conn, account=None, cloudevents=False):
         response, status = s3_notification_conf.set_config()
         assert_equal(status/100, 2)
     elif endpoint_type == 'kafka':
-        # start amqp receiver
+        # start kafka receiver
         task, receiver = create_kafka_receiver_thread(topic_name)
-        task.start()
         endpoint_address = 'kafka://' + kafka_server
         # without acks from broker
         endpoint_args = 'push-endpoint='+endpoint_address+'&kafka-ack-level=broker'
@@ -3230,9 +3268,7 @@ def test_ps_s3_notification_kafka_idle_behaviour():
     # name is constant for manual testing
     topic_name = bucket_name+'_topic'
     # create consumer on the topic
-   
     task, receiver = create_kafka_receiver_thread(topic_name+'_1')
-    task.start()
 
     # create s3 topic
     endpoint_address = 'kafka://' + kafka_server
@@ -3291,17 +3327,21 @@ def test_ps_s3_notification_kafka_idle_behaviour():
 
     is_idle = False
 
+    retries = 0
     while not is_idle:
-        print('waiting for 10sec for checking idleness')
+        if retries > 50:
+            return SkipTest("kafka broker did not become idle")
+        retries += 1
+        print('retry '+str(retries)+', waiting for 10sec for checking idleness')
         time.sleep(10)
-        cmd = "netstat -nnp | grep 9092 | grep radosgw"
+        cmd = "netstat -nnpt | grep "+str(receiver.port)+" | grep radosgw"
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
         out = proc.communicate()[0]
         if len(out) == 0:
             is_idle = True
         else:
-            print("radosgw<->kafka connection is not idle")
-            print(out.decode('utf-8'))
+            log.info("radosgw<->kafka connection is not idle")
+            log.info(out.decode('utf-8'))
 
     # do the process of uploading an object and checking for notification again
     number_of_objects = 10
@@ -3660,7 +3700,6 @@ def persistent_notification(endpoint_type, conn, account=None):
     elif endpoint_type == 'kafka':
         # start kafka receiver
         task, receiver = create_kafka_receiver_thread(topic_name)
-        task.start()
         endpoint_address = 'kafka://' + host
         endpoint_args = 'push-endpoint='+endpoint_address+'&kafka-ack-level=broker'+'&persistent=true'
     else:
@@ -4375,7 +4414,6 @@ def kafka_security(security_type, mechanism='PLAIN', use_topic_attrs_for_creds=F
     
     # create consumer on the topic
     task, receiver = create_kafka_receiver_thread(topic_name)
-    task.start()
     
     topic_arn = topic_conf.set_config()
     # create s3 notification
