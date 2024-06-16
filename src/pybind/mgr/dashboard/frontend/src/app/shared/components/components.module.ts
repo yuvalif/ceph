@@ -15,7 +15,12 @@ import {
 import { ClickOutsideModule } from 'ng-click-outside';
 import { NgChartsModule } from 'ng2-charts';
 import { SimplebarAngularModule } from 'simplebar-angular';
-import { UIShellModule, ButtonModule, NotificationModule } from 'carbon-components-angular';
+import {
+  UIShellModule,
+  ButtonModule,
+  NotificationModule,
+  IconModule
+} from 'carbon-components-angular';
 
 import { MotdComponent } from '~/app/shared/components/motd/motd.component';
 import { DirectivesModule } from '../directives/directives.module';
@@ -78,7 +83,8 @@ import { FormAdvancedFieldsetComponent } from './form-advanced-fieldset/form-adv
     NgbTimepickerModule,
     UIShellModule,
     ButtonModule,
-    NotificationModule
+    NotificationModule,
+    IconModule
   ],
   declarations: [
     SparklineComponent,
