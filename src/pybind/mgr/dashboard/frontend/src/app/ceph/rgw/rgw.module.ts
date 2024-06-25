@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+import { CommonModule, TitleCasePipe } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule, Routes } from '@angular/router';
@@ -52,6 +52,7 @@ import { RgwConfigDetailsComponent } from './rgw-config-details/rgw-config-detai
 import { RgwMultisiteWizardComponent } from './rgw-multisite-wizard/rgw-multisite-wizard.component';
 import { NfsListComponent } from '../nfs/nfs-list/nfs-list.component';
 import { NfsFormComponent } from '../nfs/nfs-form/nfs-form.component';
+import { RgwMultisiteSyncPolicyComponent } from './rgw-multisite-sync-policy/rgw-multisite-sync-policy.component';
 
 @NgModule({
   imports: [
@@ -112,8 +113,10 @@ import { NfsFormComponent } from '../nfs/nfs-form/nfs-form.component';
     BucketTagModalComponent,
     RgwConfigDetailsComponent,
     RgwConfigurationPageComponent,
-    RgwMultisiteWizardComponent
-  ]
+    RgwMultisiteWizardComponent,
+    RgwMultisiteSyncPolicyComponent
+  ],
+  providers: [TitleCasePipe]
 })
 export class RgwModule {}
 
