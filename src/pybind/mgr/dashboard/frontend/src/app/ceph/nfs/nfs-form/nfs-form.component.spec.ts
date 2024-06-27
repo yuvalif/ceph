@@ -96,7 +96,7 @@ describe('NfsFormComponent', () => {
       access_type: 'RW',
       clients: [],
       cluster_id: 'mynfs',
-      fsal: { fs_name: 'a', name: 'CEPH' },
+      fsal: { fs_name: '', name: 'CEPH' },
       path: '/',
       protocolNfsv4: true,
       protocolNfsv3: true,
@@ -104,6 +104,8 @@ describe('NfsFormComponent', () => {
       sec_label_xattr: 'security.selinux',
       security_label: false,
       squash: 'no_root_squash',
+      subvolume: '',
+      subvolume_group: '',
       transportTCP: true,
       transportUDP: true
     });
