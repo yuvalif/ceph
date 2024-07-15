@@ -1807,8 +1807,7 @@ class TestIngressService:
             '    default_backend backend\n\n'
             'backend backend\n'
             '    mode        tcp\n'
-            '    balance     source\n'
-            '    hash-type   consistent\n'
+            '    balance     roundrobin\n'
         )
         if enable_haproxy_protocol:
             haproxy_txt += '    default-server send-proxy-v2\n'
@@ -2588,8 +2587,7 @@ class TestIngressService:
             '    default_backend backend\n\n'
             'backend backend\n'
             '    mode        tcp\n'
-            '    balance     source\n'
-            '    hash-type   consistent\n'
+            '    balance     roundrobin\n'
             '    default-server send-proxy-v2\n'
             '    server nfs.foo.0 192.168.122.111:12049 check\n'
         )
