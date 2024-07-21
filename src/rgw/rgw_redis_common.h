@@ -1,6 +1,12 @@
 #pragma once
 
 #include <boost/asio/detached.hpp>
+#include <boost/describe.hpp>
+#include <boost/json/parse.hpp>
+#include <boost/json/serialize.hpp>
+#include <boost/json/value_from.hpp>
+#include <boost/json/value_to.hpp>
+#include <boost/redis/resp3/serialization.hpp>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -15,22 +21,33 @@ namespace redis {
 
 using boost::redis::config;
 using boost::redis::connection;
-using RedisResponseMap =
-    boost::redis::response<std::map<std::string, std::string>>;
 
-struct RedisResponse {
-  const int errorCode;
-  const std::string errorMessage;
-  const std::string data;
-
-  RedisResponse(const int ec, const std::string& msg)
-      : errorCode(ec), errorMessage(msg) {}
-
-  RedisResponse(const RedisResponseMap& resp)
-      : errorCode(std::stoi(std::get<0>(resp).value().at("errorCode"))),
-        errorMessage(std::get<0>(resp).value().at("errorMessage")),
-        data(std::get<0>(resp).value().at("data")) {}
+struct RedisWriteResponse {
+  int errorCode;
+  std::string errorMessage;
 };
+
+BOOST_DESCRIBE_STRUCT(RedisWriteResponse, (), (errorCode, errorMessage))
+
+void boost_redis_from_bulk(RedisWriteResponse& resp, std::string_view sv,
+                           boost::system::error_code& ec) {
+  resp = boost::json::value_to<RedisWriteResponse>(boost::json::parse(sv));
+}
+
+struct RedisReadResponse {
+  int errorCode;
+  std::string errorMessage;
+  int elementCount;
+  std::vector<std::string> data;
+};
+
+BOOST_DESCRIBE_STRUCT(RedisReadResponse, (),
+                      (errorCode, errorMessage, elementCount, data))
+
+void boost_redis_from_bulk(RedisReadResponse& resp, std::string_view sv,
+                           boost::system::error_code& ec) {
+  resp = boost::json::value_to<RedisReadResponse>(boost::json::parse(sv));
+}
 
 struct initiate_exec {
   connection* conn;
@@ -69,9 +86,14 @@ void redis_exec(connection* conn, boost::system::error_code& ec,
   }
 }
 
-RedisResponse do_redis_func(connection* conn, boost::redis::request& req,
-                            RedisResponseMap& resp, std::string func_name,
-                            optional_yield y);
+RedisReadResponse do_redis_func(connection* conn, boost::redis::request& req,
+                                boost::redis::response<RedisReadResponse>& resp,
+                                std::string func_name, optional_yield y);
+
+RedisWriteResponse do_redis_func(
+    connection* conn, boost::redis::request& req,
+    boost::redis::response<RedisWriteResponse>& resp, std::string func_name,
+    optional_yield y);
 
 int load_lua_rgwlib(boost::asio::io_context& io, connection* conn, config* cfg,
                     optional_yield y);

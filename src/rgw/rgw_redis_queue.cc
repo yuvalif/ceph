@@ -33,7 +33,7 @@ int queue_status(connection* conn, const std::string& name,
 
 int reserve(connection* conn, const std::string name, optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisWriteResponse> resp;
 
   int reserveSize = 120;
   req.push("FCALL", "reserve", 1, name, reserveSize);
@@ -43,7 +43,7 @@ int reserve(connection* conn, const std::string name, optional_yield y) {
 int commit(connection* conn, const std::string& name, const std::string& data,
            optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisWriteResponse> resp;
 
   req.push("FCALL", "commit", 1, name, data);
   return rgw::redis::do_redis_func(conn, req, resp, __func__, y).errorCode;
@@ -51,7 +51,7 @@ int commit(connection* conn, const std::string& name, const std::string& data,
 
 int abort(connection* conn, const std::string& name, optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisWriteResponse> resp;
 
   req.push("FCALL", "abort", 1, name);
   return rgw::redis::do_redis_func(conn, req, resp, __func__, y).errorCode;
@@ -60,13 +60,13 @@ int abort(connection* conn, const std::string& name, optional_yield y) {
 int read(connection* conn, const std::string& name, std::string& res,
          optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisReadResponse> resp;
 
   req.push("FCALL", "read", 1, name);
-  rgw::redis::RedisResponse ret =
+  rgw::redis::RedisReadResponse ret =
       rgw::redis::do_redis_func(conn, req, resp, __func__, y);
   if (ret.errorCode == 0) {
-    res = ret.data;
+    res = ret.data[0];
   } else {
     std::cerr << "RGW Redis Queue:: " << __func__
               << "(): ERROR: " << ret.errorMessage << std::endl;
@@ -79,13 +79,13 @@ int read(connection* conn, const std::string& name, std::string& res,
 int locked_read(connection* conn, const std::string& name,
                 std::string& lock_cookie, std::string& res, optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisReadResponse> resp;
 
   req.push("FCALL", "locked_read", 1, name, lock_cookie);
-  rgw::redis::RedisResponse ret =
+  rgw::redis::RedisReadResponse ret =
       rgw::redis::do_redis_func(conn, req, resp, __func__, y);
   if (ret.errorCode == 0) {
-    res = ret.data;
+    res = ret.data[0];
   } else {
     std::cerr << "RGW Redis Queue:: " << __func__
               << "(): ERROR: " << ret.errorMessage << std::endl;
@@ -95,9 +95,30 @@ int locked_read(connection* conn, const std::string& name,
   return ret.errorCode;
 }
 
+// int locked_read(connection* conn, const std::string& name,
+//                 std::string& lock_cookie, std::vector<std::string>& res,
+//                 optional_yield y) {
+//   boost::redis::request req;
+//   rgw::redis::RedisResponseMap resp;
+
+//   req.push("FCALL", "locked_read", 1, name, lock_cookie);
+//   rgw::redis::RedisResponse ret =
+//       rgw::redis::do_redis_func<std::vector<std::string>>(conn, req, resp,
+//                                                           __func__, y);
+//   if (ret.errorCode == 0) {
+//     res = ret.data;
+//   } else {
+//     std::cerr << "RGW Redis Queue:: " << __func__
+//               << "(): ERROR: " << ret.errorMessage << std::endl;
+//     res.clear();
+//   }
+
+//   return ret.errorCode;
+// }
+
 int ack(connection* conn, const std::string& name, optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisWriteResponse> resp;
 
   req.push("FCALL", "ack", 1, name);
   return rgw::redis::do_redis_func(conn, req, resp, __func__, y).errorCode;
@@ -106,7 +127,7 @@ int ack(connection* conn, const std::string& name, optional_yield y) {
 int locked_ack(connection* conn, const std::string& name,
                const std::string& lock_cookie, optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisWriteResponse> resp;
 
   req.push("FCALL", "locked_ack", 1, name, lock_cookie);
   return rgw::redis::do_redis_func(conn, req, resp, __func__, y).errorCode;
@@ -115,7 +136,7 @@ int locked_ack(connection* conn, const std::string& name,
 int cleanup_stale_reservations(connection* conn, const std::string& name,
                                int stale_timeout, optional_yield y) {
   boost::redis::request req;
-  rgw::redis::RedisResponseMap resp;
+  boost::redis::response<rgw::redis::RedisWriteResponse> resp;
 
   req.push("FCALL", "cleanup", 1, name, stale_timeout);
   return rgw::redis::do_redis_func(conn, req, resp, __func__, y).errorCode;

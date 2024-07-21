@@ -161,6 +161,13 @@ TEST_F(RGWRedisLockTest, RenewAfterReacquisition) {
   io.run();
 }
 
+// Todo: Attempt Acquisition after Renew
+// Client 2 shall try to acquire the lock after Client 1 has renewed it
+// Client 2 shall fail to acquire the lock
+// This shall be after t1 + timeout and before t2 + timeout
+// t1 = time at which Client 1 acquired the lock first
+// t2 = time at which Client 1 renewed the lock
+
 TEST_F(RGWRedisLockTest, MultiLock) {
   io.restart();
   boost::asio::spawn(
