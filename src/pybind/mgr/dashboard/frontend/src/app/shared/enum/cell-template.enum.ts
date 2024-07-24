@@ -60,9 +60,6 @@ export enum CellTemplate {
   This template truncates a path to a shorter format and shows the whole path in a tooltip
   eg: /var/lib/ceph/osd/ceph-0 -> /var/.../ceph-0
   */
-<<<<<<< HEAD
-  path = 'path'
-=======
   path = 'path',
   /*
   This template is used to attach tooltip to the given column value
@@ -83,5 +80,4 @@ export enum CellTemplate {
   //   cellTransformation: CellTemplate.copy,
   */
   copy = 'copy'
->>>>>>> a4f2eefe21f (mgr/dashboard: Create and delete listeners)
 }
