@@ -998,6 +998,7 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+
                 """).lstrip()
 
                 _run_cephadm.assert_called_with(

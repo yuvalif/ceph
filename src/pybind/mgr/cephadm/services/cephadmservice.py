@@ -25,6 +25,7 @@ from ceph.deployment.utils import is_ipv6, unwrap_ipv6
 from mgr_util import build_url, merge_dicts
 from orchestrator import OrchestratorError, DaemonDescription, DaemonDescriptionStatus
 from orchestrator._interface import daemon_type_to_service
+from cephadm.ssl_cert_utils import SSLCerts
 from cephadm import utils
 
 if TYPE_CHECKING:
@@ -1008,6 +1009,12 @@ class RgwService(CephService):
                 'name': 'rgw_zone',
                 'value': spec.rgw_zone,
             })
+
+        if spec.generate_cert and not spec.rgw_frontend_ssl_certificate:
+            # generate a self-signed cert for the rgw service
+            cert, key = SSLCerts().generate_root_cert(custom_san_list=spec.zonegroup_hostnames)
+            spec.rgw_frontend_ssl_certificate = ''.join([key, cert])
+            self.mgr.spec_store.save(spec)
 
         if spec.rgw_frontend_ssl_certificate:
             if isinstance(spec.rgw_frontend_ssl_certificate, list):

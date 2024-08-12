@@ -48,7 +48,7 @@ class MgmtGatewayService(CephadmService):
         if old_cert and old_key:
             self.ssl_certs.load_root_credentials(old_cert, old_key)
         else:
-            self.ssl_certs.generate_root_cert(self.mgr.get_mgr_ip())
+            self.ssl_certs.generate_root_cert(addr=self.mgr.get_mgr_ip())
             self.mgr.cert_key_store.save_cert('mgmt_gw_root_cert', self.ssl_certs.get_root_cert())
             self.mgr.cert_key_store.save_key('mgmt_gw_root_key', self.ssl_certs.get_root_key())
 
