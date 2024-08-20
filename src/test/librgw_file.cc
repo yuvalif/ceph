@@ -89,7 +89,7 @@ TEST(LibRGW, LIST_BUCKETS) {
   if (! fs)
     return;
 
-  bool eof = false;
+  int eof = 0;
   uint64_t offset = 0;
   int ret = rgw_readdir(fs, fs->root_fh, &offset, r1_cb, &fids1, &eof,
 			RGW_READDIR_FLAG_NONE);
@@ -161,7 +161,7 @@ TEST(LibRGW, LIST_OBJECTS) {
     ldout(g_ceph_context, 0) << __func__ << " readdir on bucket " << get<0>(fid)
 			     << dendl;
 
-    bool eof = false;
+    int  eof = 0;
     uint64_t offset = 0;
     int ret = rgw_readdir(fs, bucket_fh, &offset, r2_cb, &obj_vector, &eof,
 			  RGW_READDIR_FLAG_NONE);

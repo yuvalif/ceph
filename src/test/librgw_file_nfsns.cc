@@ -938,7 +938,7 @@ TEST(LibRGW, HIER1) {
 	  if (! elt.state.readdir) {
 	    // descending
 	    uint64_t offset = 0;
-	    bool eof; // XXX
+	    int eof; // XXX
 	    lsubdout(cct, rgw, 10)
 	      << "readdir in"
 	      << " bucket: " << elt.rgw_fh->bucket_name()
@@ -1059,7 +1059,7 @@ TEST(LibRGW, MARKER1_READDIR)
 
     dirent_vec dvec;
     uint64_t offset = 0;
-    bool eof = false;
+    int eof = 0;
 
     /* because RGWReaddirRequest::default_max is 1000 (XXX make
      * configurable?) and marker_nobjs is 5*1024, the number

@@ -2481,7 +2481,7 @@ int rgw_close(struct rgw_fs *rgw_fs,
 
 int rgw_readdir(struct rgw_fs *rgw_fs,
 		struct rgw_file_handle *parent_fh, uint64_t *offset,
-		rgw_readdir_cb rcb, void *cb_arg, bool *eof,
+		rgw_readdir_cb rcb, void *cb_arg, int *eof,
 		uint32_t flags)
 {
   RGWFileHandle* parent = get_rgwfh(parent_fh);
@@ -2502,7 +2502,7 @@ int rgw_readdir(struct rgw_fs *rgw_fs,
     rcb("..", cb_arg, 2, nullptr, 0, RGW_LOOKUP_FLAG_DIR);
   }
 
-  int rc = parent->readdir(rcb, cb_arg, offset, eof, flags);
+  int rc = parent->readdir(rcb, cb_arg, offset, (bool*)eof, flags);
   return rc;
 } /* rgw_readdir */
 

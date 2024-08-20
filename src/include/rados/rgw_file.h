@@ -230,7 +230,7 @@ typedef int (*rgw_readdir_cb)(const char *name, void *arg, uint64_t offset,
 
 int rgw_readdir(struct rgw_fs *rgw_fs,
 		struct rgw_file_handle *parent_fh, uint64_t *offset,
-		rgw_readdir_cb rcb, void *cb_arg, bool *eof,
+		rgw_readdir_cb rcb, void *cb_arg, int *eof,
 		uint32_t flags);
 
 /* enumeration continuing from name */

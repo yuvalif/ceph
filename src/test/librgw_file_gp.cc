@@ -229,7 +229,7 @@ TEST(LibRGW, LIST_OBJECTS) {
 
     ldout(g_ceph_context, 0) << __func__ << " readdir on bucket "
 			     << bucket_name << dendl;
-    bool eof = false;
+    int eof = 0;
     uint64_t offset = 0;
     int ret = rgw_readdir(fs, bucket_fh, &offset, r2_cb, &fids,
 			  &eof, RGW_READDIR_FLAG_NONE);

@@ -328,8 +328,8 @@ SnapMapper::get_snaps_common(const hobject_t &oid) const
 {
   ceph_assert(check(oid));
   set<string> keys{to_object_key(oid)};
-  dout(20) << fmt::format("{}: key string: {} oid:{}", __func__, keys, oid)
-	   << dendl;
+  //dout(20) << fmt::format("{}: key string: {} oid:{}", __func__, keys, oid)
+  //	   << dendl;
 
   map<string, ceph::buffer::list> got;
   int r = backend.get_keys(keys, &got);
@@ -367,10 +367,10 @@ std::set<std::string> SnapMapper::to_raw_keys(
   for (auto snap : snaps) {
     keys.insert(to_raw_key(snap, clone));
   }
-  dout(20) << fmt::format(
+  /*dout(20) << fmt::format(
 		"{}: clone:{} snaps:{} -> keys: {}", __func__, clone, snaps,
 		keys)
-	   << dendl;
+	   << dendl;*/
   return keys;
 }
 
