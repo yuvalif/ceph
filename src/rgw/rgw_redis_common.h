@@ -29,7 +29,7 @@ struct RedisWriteResponse {
 
 BOOST_DESCRIBE_STRUCT(RedisWriteResponse, (), (errorCode, errorMessage))
 
-void boost_redis_from_bulk(RedisWriteResponse& resp, std::string_view sv,
+inline void boost_redis_from_bulk(RedisWriteResponse& resp, std::string_view sv,
                            boost::system::error_code& ec) {
   resp = boost::json::value_to<RedisWriteResponse>(boost::json::parse(sv));
 }
@@ -44,7 +44,7 @@ struct RedisReadResponse {
 BOOST_DESCRIBE_STRUCT(RedisReadResponse, (),
                       (errorCode, errorMessage, elementCount, data))
 
-void boost_redis_from_bulk(RedisReadResponse& resp, std::string_view sv,
+inline void boost_redis_from_bulk(RedisReadResponse& resp, std::string_view sv,
                            boost::system::error_code& ec) {
   resp = boost::json::value_to<RedisReadResponse>(boost::json::parse(sv));
 }
