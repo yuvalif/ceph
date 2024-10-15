@@ -24,7 +24,7 @@ int read(connection* conn, const std::string& name, std::string& res,
          optional_yield y);
 
 int locked_read(connection* conn, const std::string& name,
-                std::string& lock_cookie, std::string& res, optional_yield y);
+                const std::string& lock_cookie, std::string& res, optional_yield y);
 
 int ack(connection* conn, const std::string& name, optional_yield y);
 

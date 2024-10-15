@@ -77,7 +77,7 @@ int read(connection* conn, const std::string& name, std::string& res,
 }
 
 int locked_read(connection* conn, const std::string& name,
-                std::string& lock_cookie, std::string& res, optional_yield y) {
+                const std::string& lock_cookie, std::string& res, optional_yield y) {
   boost::redis::request req;
   boost::redis::response<rgw::redis::RedisReadResponse> resp;
 
