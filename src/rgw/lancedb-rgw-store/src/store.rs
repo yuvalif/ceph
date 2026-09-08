@@ -340,13 +340,8 @@ impl ObjectStore for RGWObjectStore {
                     )
                 };
 
-                if result == 0 {
-                    Ok(PutResult {
-                        e_tag: None,
-                        version: None,
-                    })
-                } else {
-                    Err(Self::errno_to_error(result, location, "put"))
+                if result != 0 {
+                    return Err(Self::errno_to_error(result, location, "put"));
                 }
                 let e_tag = unsafe { etag_from_ptr(etag_ptr) };
                 Ok(PutResult {
