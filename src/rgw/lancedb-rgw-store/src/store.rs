@@ -188,8 +188,10 @@ impl RGWObjectStore {
         } else {
             Some(CStr::from_ptr(entry.etag).to_string_lossy().into_owned())
         };
+        // Keys written through this store are already percent-encoded
+        let location = Path::parse(&key).unwrap_or_else(|_| Path::from(key));
         ObjectMeta {
-            location: Path::from(key),
+            location,
             last_modified: Self::timestamp(entry.last_modified, entry.last_modified_ns),
             size: entry.size,
             e_tag,

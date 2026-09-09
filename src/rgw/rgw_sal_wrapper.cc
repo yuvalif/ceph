@@ -306,8 +306,11 @@ int rgw_put_object_conditional( CRgwDriver* driver_ptr, const CRgwDoutPrefix* dp
                             rctx, 0);
 
   // Backend returns ERR_PRECONDITION_FAILED when if_match/if_nomatch fails;
-  // set canceled=1
-  if (ret == -ERR_PRECONDITION_FAILED) {
+  // set canceled=1.
+  //
+  // when if_match etag is used the backend reports a missing object as
+  // ENOENT rather than ERR_PRECONDITION_FAILED
+  if (ret == -ERR_PRECONDITION_FAILED || (ret == -ENOENT && if_match)) {
     if (canceled) *canceled = 1;
     return 0;
   }
