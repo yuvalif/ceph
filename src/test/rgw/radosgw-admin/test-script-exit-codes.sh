@@ -288,41 +288,34 @@ check "script-package: stray between the command words" 1 script-package extra l
 check "script-package: stray before the command" 1 foo script-package list
 check "script-package list: empty stray word" 1 script-package list ""
 check "script-package add: stray after" 1 script-package add strayarg
-check "script-package rm: stray after" 1 script-package rm strayarg
 check "script-package list: stray after" 1 script-package list strayarg
 check "script-package reload: stray after" 1 script-package reload strayarg
 
 # unrecognized flag, on every subcommand
 check "script-package add: unrecognized flag" 22 script-package add --fakeflag
-check "script-package rm: unrecognized flag" 22 script-package rm --fakeflag
 check "script-package list: unrecognized flag" 22 script-package list --fakeflag
 check "script-package reload: unrecognized flag" 22 script-package reload --fakeflag
 
 # missing option value (parse-level, exit 1). --package is the only value
-# option these commands take.
+# option this command uses.
 check "script-package add: --package missing value" 1 script-package add --package
-check "script-package rm: --package missing value" 1 script-package rm --package
 
 # --allow-compilation is a binary flag: it takes the next token only when that
 # token is a bool, so anything else is left behind as a stray.
 check "script-package add: --allow-compilation banana (left as stray)" 1 script-package add --allow-compilation banana
 
-# handler-level (cluster). 'add' and 'rm' both want a package name first;
-# 'list' and 'reload' have nothing to validate and run straight away.
+# handler-level (cluster). 'add' wants a package name first; 'list' and
+# 'reload' have nothing to validate and run straight away.
 check_cluster "script-package add: missing --package" 22 -- script-package add
-check_cluster "script-package rm: missing --package" 22 -- script-package rm
 check_cluster "script-package list" 0 -- script-package list
 check_cluster "script-package reload" 0 -- script-package reload
 
-# a package name that is not installed. 'add' fails to add it; 'rm' removes
-# nothing and still succeeds.
+# a package name that is not installed. 'add' fails to add it.
 check_cluster "script-package add: nonexistent package" 22 -- script-package add --package no-such-package
-check_cluster "script-package rm: nonexistent package" 0 -- script-package rm --package no-such-package
 check_cluster "script-package add: --package=no-such-package (=form)" 22 -- script-package add --package=no-such-package
 # an empty package name is still a name, so it is not reported as missing.
 # The add is attempted and fails instead.
 check_cluster "script-package add: --package empty" 1 -- script-package add --package ""
-check_cluster "script-package rm: --package empty" 0 -- script-package rm --package ""
 
 # --allow-compilation does take a bool, and no stray is reported: the add is
 # attempted and fails.
@@ -339,18 +332,16 @@ check_cluster "script-package add: unrelated --max-entries 5 swallowed (space fo
 check_cluster "script-package list: unrelated --max-entries 5 swallowed" 0 -- script-package list --max-entries 5
 check_cluster "script-package reload: --package accepted and ignored" 0 -- script-package reload --package no-such-package
 
-# flags between script-package and its subcommand. The value still reaches the
-# outcome is the same as when the flag comes last.
+# flags between script-package and its subcommand. The outcome is the same as
+# when the flag comes last.
 # --tenant trips the global "no user ID" check.
 check_cluster "script-package add: --package before add" 22 -- script-package --package no-such-package add
-check_cluster "script-package rm: --package before rm" 0 -- script-package --package no-such-package rm
 check_cluster "script-package add: --allow-compilation before add" 22 -- script-package --allow-compilation add --package no-such-package
 check_cluster "script-package list: --format before list" 0 -- script-package --format json list
 check_cluster "script-package list: --tenant before list" 22 -- script-package --tenant t list
 
 # the same flag given twice
 check_cluster "script-package add: duplicate --package" 22 -- script-package add --package a --package no-such-package
-check_cluster "script-package rm: duplicate --package" 0 -- script-package rm --package a --package no-such-package
 check_cluster "script-package add: duplicate --allow-compilation" 22 -- script-package add --allow-compilation --allow-compilation --package no-such-package
 
 # --tenant and --format in their ordinary position
@@ -358,6 +349,38 @@ check_cluster "script-package list: --tenant" 22 -- script-package list --tenant
 check_cluster "script-package add: --tenant" 22 -- script-package add --package no-such-package --tenant t
 check_cluster "script-package list: --format json" 0 -- script-package list --format json
 
+# rm and remove are the same command, so every rm row runs for both.
+script_package_rm_tests() {
+  local verb="$1"
+
+  # stray positional args
+  check "script-package $verb: stray after" 1 script-package "$verb" strayarg
+
+  # unrecognized flag
+  check "script-package $verb: unrecognized flag" 22 script-package "$verb" --fakeflag
+
+  # missing option value (parse-level, exit 1). --package is the only value
+  # option this command uses.
+  check "script-package $verb: --package missing value" 1 script-package "$verb" --package
+
+  # handler-level (cluster): it wants a package name first
+  check_cluster "script-package $verb: missing --package" 22 -- script-package "$verb"
+
+  # a package name that is not installed: nothing is removed, and it still
+  # succeeds. An empty name is still a name, so it is not reported as missing.
+  check_cluster "script-package $verb: nonexistent package" 0 -- script-package "$verb" --package no-such-package
+  check_cluster "script-package $verb: --package empty" 0 -- script-package "$verb" --package ""
+
+  # a flag between script-package and the verb. The outcome is the same as
+  # when the flag comes last.
+  check_cluster "script-package $verb: --package before $verb" 0 -- script-package --package no-such-package "$verb"
+
+  # the same flag given twice
+  check_cluster "script-package $verb: duplicate --package" 0 -- script-package "$verb" --package a --package no-such-package
+}
+
+script_package_rm_tests rm
+script_package_rm_tests remove
 
 # ============================================================
 echo ""
