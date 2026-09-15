@@ -29,6 +29,7 @@ FAIL=0
 SKIP=0
 XFAILED=0
 XPASSED=0
+unset XFAIL
 
 # Filter out noisy ceph log lines and config-not-found lines
 filter() {
