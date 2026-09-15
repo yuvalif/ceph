@@ -13,6 +13,7 @@
 #   check_bucket() - also needs the test bucket, SKIPs when there is none
 #
 # All three verify the exit code.
+# XFAIL="reason" in front of check_cluster or check_bucket marks an expected failure.
 #
 # Run from the build directory:
 #   cd /path/to/ceph/build && bash /path/to/test-bucket-exit-codes.sh
@@ -26,6 +27,8 @@ export CEPH_ARGS="--log-to-stderr=false${CEPH_ARGS:+ ${CEPH_ARGS}}"
 PASS=0
 FAIL=0
 SKIP=0
+XFAILED=0
+XPASSED=0
 
 # Filter out noisy ceph log lines and config-not-found lines
 filter() {
@@ -76,8 +79,17 @@ check_cluster() {
   local exit_code=$?
 
   if [ "$exit_code" = "$expected_exit" ]; then
-    echo "PASS [$desc]"
-    PASS=$((PASS+1))
+    if [ -n "$XFAIL" ]; then
+      echo "XPASS [$desc]: marked as an expected failure, but passed"
+      XPASSED=$((XPASSED+1))
+    else
+      echo "PASS [$desc]"
+      PASS=$((PASS+1))
+    fi
+  elif [ -n "$XFAIL" ]; then
+    echo "XFAIL [$desc]: expected exit $expected_exit, got $exit_code ($XFAIL)"
+    echo "     output: $(filter <"$tmpfile")"
+    XFAILED=$((XFAILED+1))
   else
     echo "FAIL [$desc]: expected exit $expected_exit, got $exit_code"
     echo "     output: $(filter <"$tmpfile")"
@@ -2031,7 +2043,7 @@ fi
 # ============================================================
 echo ""
 echo "========================================"
-echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
+echo "Results: $PASS passed, $FAIL failed, $XFAILED expected failures, $XPASSED unexpected passes, $SKIP skipped"
 [ "$SKIP" -gt 0 ] && echo "(skipped tests need a running cluster, and some of those also need the aws CLI to create a test bucket)"
 echo "========================================"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
