@@ -842,6 +842,8 @@ def test_vector_bucket_shared_instance_namespace(delete_first, owner_type):
 
         # A local metadata update must preserve the vector layout and initialize
         # its native index, while remaining valid for indexless storage too.
+        # the vector instance is local to the zone, so the update is legitimate on
+        # a non-master zone as well, where it has to be confirmed
         vector_metadata_key = f'bucket.instance:{vector_key}'
         vector_metadata = admin_json(['metadata', 'get', vector_metadata_key])
         s3_metadata = metadata_get(f'bucket.instance:{s3_key}')
@@ -849,7 +851,8 @@ def test_vector_bucket_shared_instance_namespace(delete_first, owner_type):
             json.dump(vector_metadata, metadata_file)
             metadata_file.flush()
             out, ret = admin(['metadata', 'put', vector_metadata_key,
-                              '--infile', metadata_file.name])
+                              '--infile', metadata_file.name,
+                              '--yes-i-really-mean-it'])
             assert ret == 0, out
         assert metadata_get(vector_metadata_key) == vector_metadata['data']
         # the S3 instance of the same name is not touched by the update
@@ -950,7 +953,10 @@ def test_vector_bucket_not_stale_instance():
         assert vector_key in keys
         assert s3_key in keys
 
-        stale = _admin_json(['reshard', 'stale-instances', 'list'])
+        # the listing has to be confirmed where resharding is disabled, i.e. in
+        # a multisite configuration
+        stale = _admin_json(['reshard', 'stale-instances', 'list',
+                             '--yes-i-really-mean-it'])
         assert vector_key not in stale, f'vector bucket instance reported as stale: {stale}'
         assert s3_key not in stale, f'S3 bucket instance reported as stale: {stale}'
 
@@ -997,14 +1003,18 @@ def test_vector_bucket_instance_metadata_rm():
         assert vector_key in keys
         assert s3_key in keys
 
-        out, ret = admin(['metadata', 'rm', f'bucket.instance:{vector_key}'], stderr=None)
+        # the vector instance is local to the zone, so the removal is legitimate
+        # on a non-master zone as well, where it has to be confirmed
+        out, ret = admin(['metadata', 'rm', f'bucket.instance:{vector_key}',
+                          '--yes-i-really-mean-it'], stderr=None)
         assert ret == 0, out
         keys = _admin_json(['metadata', 'list', 'bucket.instance'])
         assert vector_key not in keys, f'vector bucket instance still listed: {keys}'
         out, ret = admin(['metadata', 'get', f'bucket.instance:{vector_key}'], stderr=None)
         assert ret != 0, f'vector bucket instance still exists: {out}'
         # a missing instance is reported, as for any metadata key
-        out, ret = admin(['metadata', 'rm', f'bucket.instance:{vector_key}'], stderr=None)
+        out, ret = admin(['metadata', 'rm', f'bucket.instance:{vector_key}',
+                          '--yes-i-really-mean-it'], stderr=None)
         assert ret != 0, f'removing a missing vector bucket instance succeeded: {out}'
 
         # the S3 bucket of the same name is intact
@@ -1016,7 +1026,8 @@ def test_vector_bucket_instance_metadata_rm():
         # without its instance the vector bucket cannot be deleted through the
         # API any more, so its entrypoint is dropped directly
         _delete_vector_bucket_if_exists(conn, bucket_name)
-        admin(['metadata', 'rm', f'vectorbucket:{bucket_name}'], stderr=None)
+        admin(['metadata', 'rm', f'vectorbucket:{bucket_name}',
+               '--yes-i-really-mean-it'], stderr=None)
         s3conn.delete_bucket(Bucket=bucket_name)
 
 
@@ -1240,7 +1251,7 @@ def test_vector_bucket_survives_bilog_autotrim():
     """ the automated trimming of the bucket index logs removes the instances of
     buckets that are deleted: no peer zone syncs them, and they have no
     entrypoint. a vector bucket is never synced and has no S3 entrypoint, and
-    must be left alone by the trimming of both zones """
+    must be left alone by the trimming """
     conn = connection()
     conn2 = connection2()
     if not conn2:
@@ -1265,11 +1276,11 @@ def test_vector_bucket_survives_bilog_autotrim():
         # the instance is listed with the S3 instances, which the trim walks
         assert vector_key in _admin_json(['metadata', 'list', 'bucket.instance'])
 
-        # the zone holding the vector bucket finds no peer syncing it, and the
-        # other zone has nothing of it
-        for cluster in (get_config_cluster(), get_config_cluster2()):
-            out, ret = admin(['bilog', 'autotrim'], cluster=cluster)
-            assert ret == 0, out
+        # the zone holding the vector bucket finds no peer syncing it. the other
+        # zone has nothing of it, and is not trimmed: in teuthology, its keyring
+        # is not installed on the node running the tests
+        out, ret = admin(['bilog', 'autotrim'])
+        assert ret == 0, out
 
         # the vector bucket, its index and its vectors are intact
         _admin_json(['metadata', 'get', f'bucket.instance:{vector_key}'])
