@@ -225,11 +225,18 @@ private:
     std::atomic<uint64_t> insert_count{0};
     std::atomic<uint64_t> delete_count{0};
     ceph::coarse_real_time last_rebuild_time;
+    // Set when an evaluation found the rebuild lock held by another RGW
+    // instance: the table is not re-evaluated before this point (one lock TTL
+    // later), since the holder refreshes the lock for the whole build and
+    // re-reading it earlier only costs a lock GET and a stats read per tick.
+    // Written under a unique_lock like last_rebuild_time.
+    ceph::coarse_real_time defer_until;
     table_state_t() = default;
     table_state_t(table_state_t&& o) noexcept
       : insert_count(o.insert_count.load()),
         delete_count(o.delete_count.load()),
-        last_rebuild_time(o.last_rebuild_time) {}
+        last_rebuild_time(o.last_rebuild_time),
+        defer_until(o.defer_until) {}
   };
   // guards the `tables` map: shared (read) while the scan loop iterates and while
   // notify_index_mutation bumps a counter; exclusive only to insert a new entry.
@@ -927,6 +934,9 @@ private:
   static constexpr int RESULT_SKIPPED = 1;
   static constexpr int RESULT_ALREADY_BUILDING = 2;
   static constexpr int RESULT_REBUILD_DISABLED = 3;
+  // the rebuild lock is held by another RGW instance: a skip, but one whose
+  // retry is paced by the lock TTL rather than the rebuild cooldown.
+  static constexpr int RESULT_LOCK_HELD = 4;
 
   void restore_counters(const table_name_t& table_name,
                         uint64_t inserts, uint64_t deletes) {
@@ -1115,11 +1125,18 @@ private:
                      table_name.ns.name(), bucket_name, index_name);
         return lock_result.ret;
       }
-      // benign: the lock is genuinely held by another instance, or the bucket is
-      // gone (e.g. the vector bucket was deleted) — nothing to rebuild here.
-      ldpp_dout(this, 5) << "INFO: lock held by another process (or bucket gone) for "
+      if (lock_result.ret == -ENOENT) {
+        // benign: the bucket is gone (e.g. the vector bucket was deleted) —
+        // nothing to rebuild here.
+        ldpp_dout(this, 5) << "INFO: lock bucket gone for "
+            << bucket_name << "." << index_name << ", skipping" << dendl;
+        return RESULT_SKIPPED;
+      }
+      // benign: the lock is genuinely held by another instance, which is
+      // building this index right now. Retry only after a lock TTL.
+      ldpp_dout(this, 5) << "INFO: lock held by another process for "
           << bucket_name << "." << index_name << ", skipping" << dendl;
-      return RESULT_SKIPPED;
+      return RESULT_LOCK_HELD;
     }
     const std::string& lock_token = lock_result.token;
 
@@ -1508,6 +1525,12 @@ private:
                 << ", deletes=" << deletes << ")" << dendl;
             continue;
           }
+          if (now < state.defer_until) {
+            ldpp_dout(this, 20) << "INFO: table " << name.bucket << "." << name.index
+                << " rebuild lock held by another instance, deferring (inserts="
+                << inserts << ", deletes=" << deletes << ")" << dendl;
+            continue;
+          }
           {
             std::lock_guard lg(active_builds_mutex);
             if (active_builds.count(name)) {
@@ -1544,18 +1567,38 @@ private:
               [this, table_name = name, inserts, deletes, max_concurrent](boost::asio::yield_context yield) {
             const auto build_start = ceph::coarse_real_clock::now();
             const int rc = process_table(table_name, inserts, deletes, yield);
-            if (rc == 0) {
+            {
+              // The cooldown applies to every evaluation of the table, not only
+              // to a completed rebuild: a skipped attempt (thresholds not met
+              // under the lock) and a transient failure both restore the
+              // mutation counters, so without a cooldown the table would be
+              // re-selected on the very next 1s tick. The first evaluation of a
+              // table is still not gated (last_rebuild_time starts at zero).
+              //
+              // When the lock is held by another instance the cooldown (a few
+              // seconds, sized to pace rebuilds under write load) is far too
+              // short: the holder refreshes the lock for as long as its build
+              // runs, so re-checking before a full lock TTL has passed only
+              // re-reads the lock and the index stats. Defer by the TTL instead.
+              //
               // Acquired on an s3v-worker thread (io_context), NOT the main-loop
-              // thread that runs the scan above. last_rebuild_time is a non-atomic
-              // field, so this write needs an exclusive lock to not race the scan's
-              // shared_lock reader (see process_tables). Short-lived: just a map
-              // lookup + assignment.
-              std::unique_lock ul(tables_mutex);//short time lock to update last_rebuild_time after successful rebuild
+              // thread that runs the scan above. last_rebuild_time and
+              // defer_until are non-atomic fields, so this write needs an
+              // exclusive lock to not race the scan's shared_lock reader (see
+              // process_tables). Short-lived: just a map lookup + assignment.
+              const auto now = ceph::coarse_real_clock::now();
+              std::unique_lock ul(tables_mutex);
               auto it = tables.find(table_name);
               if (it != tables.end()) {
-                it->second.last_rebuild_time = ceph::coarse_real_clock::now();
+                it->second.last_rebuild_time = now;
+                if (rc == RESULT_LOCK_HELD) {
+                  const auto lock_ttl = std::chrono::seconds(
+                      cct->_conf.get_val<uint64_t>("rgw_s3vector_index_lock_ttl_seconds"));
+                  it->second.defer_until = now + lock_ttl;
+                }
               }
-            } else if (rc < 0) {
+            }
+            if (rc < 0) {
               ldpp_dout(this, 1) << "ERROR: failed to process table: " << table_name.bucket
                   << "." << table_name.index << " with error code: " << rc << dendl;
             }

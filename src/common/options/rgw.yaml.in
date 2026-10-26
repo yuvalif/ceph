@@ -5224,7 +5224,9 @@ options:
     preventing premature reclamation regardless of build duration. A shorter
     TTL (e.g. 120s) enables faster crash recovery. Lock refresh runs on the
     manager's dedicated main-loop thread, so it is not starved by in-flight
-    builds.
+    builds. An instance that finds the lock held by another instance does not
+    re-evaluate that index before one TTL has passed, so the TTL also sets how
+    long such an instance waits before retrying its own pending rebuild.
   default: 120
   min: 6
   services:
@@ -5338,7 +5340,12 @@ options:
   desc: Minimum interval in seconds between successive rebuilds of the same table
   long_desc: After a rebuild completes (or is evaluated) for a table, the
     background manager waits this many seconds before considering the table for
-    another rebuild. Prevents thrashing under sustained write load.
+    another rebuild. This covers every outcome of an evaluation, including an
+    attempt that was skipped because the rebuild thresholds were not met and an
+    attempt that failed. Prevents thrashing under sustained write load. An
+    attempt skipped because another RGW instance holds the rebuild lock is
+    instead retried after rgw_s3vector_index_lock_ttl_seconds. The first
+    evaluation of a table is never delayed.
   default: 5
   min: 0
   services:
