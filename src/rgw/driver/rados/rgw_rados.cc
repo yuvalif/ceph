@@ -9446,8 +9446,10 @@ int RGWRados::check_reshard_logrecord_status(RGWBucketInfo& bucket_info, optiona
   if (now - bucket_info.layout.judge_reshard_lock_time >= make_timespan(reshard_progress_judge_interval)) {
 
     map<string, bufferlist> bucket_attrs;
+    // an S3 bucket and a vector bucket can have the same name
+    auto* bucket_ctl = bucket_info.is_vector() ? ctl.vector_bucket : ctl.bucket;
     int ret = get_bucket_info(&svc, bucket_info.bucket.tenant, bucket_info.bucket.name,
-                              bucket_info, nullptr, y, dpp, ctl.bucket, &bucket_attrs);
+                              bucket_info, nullptr, y, dpp, bucket_ctl, &bucket_attrs);
     if (ret < 0) {
       ldpp_dout(dpp, 0) << __func__ <<
         " ERROR: failed to refresh bucket info : " << cpp_strerror(-ret) << dendl;
@@ -9536,10 +9538,13 @@ int RGWRados::block_while_resharding(RGWRados::BucketShard *bs,
   // lambda successfully fetches a new bucket id, it sets
   // new_bucket_id and returns 0, otherwise it returns a negative
   // error code
+  // an S3 bucket and a vector bucket can have the same name, so the refresh
+  // must go through the entrypoint of the bucket's own kind
+  auto* bucket_ctl = bucket_info.is_vector() ? ctl.vector_bucket : ctl.bucket;
   auto fetch_new_bucket_info =
-    [this, bs, &obj_instance, &bucket_info, &bucket_attrs, &y, dpp](const std::string& log_tag) -> int {
+    [this, bs, &obj_instance, &bucket_info, &bucket_attrs, &y, dpp, bucket_ctl](const std::string& log_tag) -> int {
     int ret = get_bucket_info(&svc, bs->bucket.tenant, bs->bucket.name,
-			      bucket_info, nullptr, y, dpp, ctl.bucket, &bucket_attrs);
+			      bucket_info, nullptr, y, dpp, bucket_ctl, &bucket_attrs);
     if (ret < 0) {
       ldpp_dout(dpp, 0) << __func__ <<
 	" ERROR: failed to refresh bucket info after reshard at " <<
